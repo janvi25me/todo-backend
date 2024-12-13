@@ -31,12 +31,13 @@ const validateUserData = (data) => {
 
 //user signup
 export const signup = async (req, res) => {
-  const { name, email, password } = req.body;
-  console.log(req.body);
+  const { name, email, password, role } = req.body;
+  // console.log(req.body);
   const { valid, errors } = validateUserData({
     name,
     email,
     password,
+    role,
   });
 
   if (!valid) {
@@ -55,9 +56,13 @@ export const signup = async (req, res) => {
       name,
       email,
       password: hashedPassword,
+      role,
     });
     await user.save();
-    res.status(200).json({ message: "User registered successfully", user });
+    res.status(200).json({
+      message: `User registered successfully with ${user.name} & ${user.role}`,
+      user,
+    });
   } catch (error) {
     res
       .status(500)
@@ -67,8 +72,9 @@ export const signup = async (req, res) => {
 
 //user login
 export const login = async (req, res) => {
-  const { email, password } = req.body;
-  const { valid, errors } = validateUserData({ email, password });
+  const { email, password, role } = req.body;
+  // console.log(req.body);
+  const { valid, errors } = validateUserData({ email, password, role });
 
   if (!valid) {
     return res.status(400).json({
@@ -89,9 +95,9 @@ export const login = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { userId: user._id },
+      { userId: user._id, role: user.role },
       process.env.JWT_SECRET || "$@#%^&*()~",
-      { expiresIn: "6h" }
+      { expiresIn: "2d" }
     );
 
     res.status(200).json({
@@ -101,6 +107,7 @@ export const login = async (req, res) => {
         id: user._id,
         email: user.email,
         name: user.name,
+        role: user.role,
       },
     });
   } catch (err) {

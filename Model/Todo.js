@@ -1,8 +1,14 @@
 import mongoose from "mongoose";
 
 const todoSchema = new mongoose.Schema({
-  tag: { type: String, required: true },
-  description: { type: String, required: true },
+  name: { type: String, required: true },
+  description: { type: String },
+  price: { type: Number, required: true },
+  SellerId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true,
+  },
   createdAt: { type: Date, default: Date.now },
 });
 

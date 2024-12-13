@@ -5,6 +5,7 @@ import cors from "cors";
 import bodyParser from "body-parser";
 import userRoute from "./Routes/userRoute.js";
 import todoRoute from "./Routes/todoRoute.js";
+// import adminRoute from "./Routes/adminRoute.js";
 
 const app = express();
 app.use(bodyParser.json());
@@ -23,9 +24,9 @@ app.use(
 app.use("/api/user", userRoute);
 app.use("/api/todo", todoRoute);
 
-app.use("/", (req, res) => {
-  res.send("This is home route");
-});
+// app.use("/", (req, res) => {
+//   res.send("This is home route");
+// });
 
 app.listen(process.env.PORT || 1000, () => {
   console.log(`Server is started on ${process.env.PORT}`);
