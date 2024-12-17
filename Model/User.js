@@ -1,10 +1,9 @@
 import mongoose from "mongoose";
 import { z } from "zod";
 
-let roles = ["1", "2", "3"];
+let roles = ["1", "2"];
 //1 : Buyer
 //2: Seller
-//3: Admin
 
 export const userValidationSchema = z.object({
   name: z.string().min(3, "Name must be at least 3 characters").optional(),

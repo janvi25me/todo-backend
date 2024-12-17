@@ -2,13 +2,23 @@ import { Todo } from "../Model/Todo.js";
 import mongoose from "mongoose";
 import { User } from "../Model/User.js";
 
+// role: Buyer =1, Seller =2
+
 export const addTodo = async (req, res) => {
   const { name, description, price } = req.body;
   const SellerId = req.user.id;
-  // console.log("user id", SellerId);
-  // console.log(req.body);
+  const role = req.user.role;
+
+  console.log("Role:", role, "Type:", typeof role);
+  console.log(req.body);
 
   try {
+    if (Number(role) !== 2) {
+      return res.status(403).json({
+        message: "Unauthorized: Only sellers (roleId = 2) can add products",
+      });
+    }
+
     const todo = await Todo.create({
       name,
       description,
@@ -31,14 +41,34 @@ export const addTodo = async (req, res) => {
 
 export const editTodo = async (req, res) => {
   const eid = req.params.eid;
-  //   console.log("Edit id is ", eid);
-  //   console.log(req.body);
-
-  if (!mongoose.Types.ObjectId.isValid(eid)) {
-    return res.status(400).json({ message: "Invalid todo ID format" });
-  }
+  const userId = req.user.id;
+  const userRole = req.user.role;
+  console.log(userId);
   try {
-    let todo = await Todo.findByIdAndUpdate(
+    if (!mongoose.Types.ObjectId.isValid(eid)) {
+      return res.status(400).json({ message: "Invalid todo ID format" });
+    }
+
+    let todo = await Todo.findById(eid);
+
+    // check if the user is a buyer
+    if (userRole == 1) {
+      return res.status(403).json({
+        message: "You are not allowed to edit this product",
+        success: false,
+      });
+    }
+
+    //check if the user is not seller
+    // if (userRole !== 2) {
+    //   return res.status(403).json({
+    //     message: "Only sellers can edit products",
+    //     success: false,
+    //   });
+    // }
+
+    // seller can update
+    todo = await Todo.findByIdAndUpdate(
       eid,
       { $set: req.body },
       {
@@ -46,81 +76,25 @@ export const editTodo = async (req, res) => {
         runValidators: true,
       }
     );
-    if (!todo) {
-      return res
-        .status(404)
-        .json({ message: "todo not found", success: false });
-    }
-    res.status(200).json({ message: "Data updated", success: true, todo });
+
+    res.status(200).json({ message: "Todo updated", success: true, todo });
   } catch (err) {
     console.log("Error while updating", err);
+    res.status(500).json({ message: "Internal server error" });
   }
 };
 
-// export const editTodo = async (req, res) => {
-//   const eid = req.params.eid;
-//   const { id: userId, role } = req.user;
-
-//   if (!mongoose.Types.ObjectId.isValid(eid)) {
-//     return res.status(400).json({ message: "Invalid todo ID format" });
-//   }
-
-//   try {
-//     const todo = await Todo.findById(eid);
-
-//     if (!todo) {
-//       return res
-//         .status(404)
-//         .json({ message: "Todo not found", success: false });
-//     }
-
-//     if (role === "1") {
-//       if (todo.SellerId !== userId) {
-//         return res.status(403).json({
-//           message: "Not authorized. Buyers can only edit their own todos.",
-//           success: false,
-//         });
-//       }
-//     } else if (role === "2") {
-//       if (todo.SellerId && todo.SellerId !== userId) {
-//         return res.status(403).json({
-//           message: "Not authorized. Sellers cannot edit other sellers' todos.",
-//           success: false,
-//         });
-//       }
-//     } else {
-//       return res.status(403).json({
-//         message: "Not authorized. Only buyers and sellers can edit todos.",
-//         success: false,
-//       });
-//     }
-
-//     const updatedTodo = await Todo.findByIdAndUpdate(
-//       eid,
-//       { $set: req.body },
-//       {
-//         new: true,
-//         runValidators: true,
-//       }
-//     );
-
-//     res.status(200).json({
-//       message: "Todo updated successfully",
-//       success: true,
-//       todo: updatedTodo,
-//     });
-//   } catch (err) {
-//     console.error("Error while updating todo", err);
-//     res.status(500).json({
-//       message: "Internal server error",
-//       error: err.message,
-//     });
-//   }
-// };
-
 export const deleteTodo = async (req, res) => {
   const id = req.params.id;
+  const userRole = req.user.role;
   //   console.log("ID for delete todo", id);
+
+  if (userRole == 1) {
+    return res.status(403).json({
+      message: "You are not allowed to edit this product",
+      success: false,
+    });
+  }
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return res.status(400).json({ message: "Invalid todo ID format" });
@@ -224,24 +198,28 @@ export const getProductByBuyerId = async (req, res) => {
     let todos;
 
     if (role === "1") {
-      todos = await Todo.find({ SellerId: id });
+      todos = await Todo.find();
     } else {
       return res.status(403).json({
-        message: "Access denied. Only buyers can fetch their todos.",
+        message: "Access denied. Only buyers can fetch products.",
         success: false,
       });
     }
 
     if (!todos || todos.length === 0) {
       return res.status(400).json({
-        message: "No todos found for this buyer.",
+        message: "No products found.",
         success: false,
       });
     }
 
-    res.status(200).json({ message: "Data items found", success: true, todos });
+    res.status(200).json({
+      message: "Products retrieved successfully.",
+      success: true,
+      todos,
+    });
   } catch (err) {
-    console.error("Error while getting todos by user ID", err);
+    console.error("Error while getting products", err);
     res.status(500).json({
       message: "Internal server error",
       error: err.message,
@@ -249,34 +227,37 @@ export const getProductByBuyerId = async (req, res) => {
   }
 };
 
-export const getPRoductBySellerId = async (req, res) => {
+export const getProductBySellerId = async (req, res) => {
   const sid = req.user?.id;
-  // console.log("*", req?.user);
-  // console.log("Admin id", aid);
+  const role = req.user?.role;
+
   if (!sid) {
     return res.status(401).json({ message: "User not authenticated." });
   }
-  // console.log("Seller id", sid);
 
   try {
     const user = await User.findById(sid);
-    if (!user || user.role !== "2") {
+    if (!user || role !== "2") {
       return res
         .status(403)
-        .json({ message: "Not authorized. Admin required." });
+        .json({ message: "Not authorized. Seller role required." });
     }
 
-    let todos = await Todo.find({ SellerId: sid });
+    const todos = await Todo.find({ SellerId: sid });
 
     if (!todos || todos.length === 0) {
       return res
-        .status(400)
-        .json({ message: "No todos found for this admin", success: false });
+        .status(404)
+        .json({ message: "No products found for this seller", success: false });
     }
 
-    res.status(200).json({ message: "Data items found", success: true, todos });
+    res.status(200).json({
+      message: "Products retrieved successfully",
+      success: true,
+      todos,
+    });
   } catch (err) {
-    console.log("Error while getting todos by admin ID", err);
+    console.error("Error while getting products by seller ID", err);
     res
       .status(500)
       .json({ message: "Internal server error", error: err.message });

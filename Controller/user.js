@@ -59,9 +59,20 @@ export const signup = async (req, res) => {
       role,
     });
     await user.save();
+
+    const token = jwt.sign({ userId: user._id }, "SECRET_KEY", {
+      expiresIn: "1d",
+    });
+
     res.status(200).json({
-      message: `User registered successfully with ${user.name} & ${user.role}`,
-      user,
+      message: `User registered successfully with ${user.name}`,
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
+      token,
     });
   } catch (error) {
     res
@@ -102,13 +113,14 @@ export const login = async (req, res) => {
 
     res.status(200).json({
       message: `Welcome ${user.name}`,
-      token,
+
       user: {
         id: user._id,
         email: user.email,
         name: user.name,
         role: user.role,
       },
+      token,
     });
   } catch (err) {
     console.log("Error while login", err);

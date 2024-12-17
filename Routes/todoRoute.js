@@ -6,7 +6,7 @@ import {
   //   getTodos,
   allTodos,
   getProductByBuyerId,
-  getPRoductBySellerId,
+  getProductBySellerId,
   //   getAllProducts,
 } from "../Controller/todo.js";
 import { Authenticated } from "../Middleware/Auth.js";
@@ -19,11 +19,11 @@ router.patch("/edit/:eid", Authenticated, editTodo); // api/todo/edit/6536465435
 
 router.delete("/:id", Authenticated, deleteTodo);
 
-router.get("/all", allTodos);
+router.get("/all", Authenticated, allTodos);
 
 router.get("/buyer/:bid", Authenticated, getProductByBuyerId);
 
-router.get("/seller/:sid", Authenticated, getPRoductBySellerId);
+router.get("/seller/:sid", Authenticated, getProductBySellerId);
 
 // router.get("/admin/:aid", getAllProducts);
 // router.get("/getTodo", Authenticated, getTodos);
