@@ -1,6 +1,6 @@
 import { Todo } from "../Model/Todo.js";
-import mongoose from "mongoose";
 import { User } from "../Model/User.js";
+import mongoose from "mongoose";
 
 // role: Buyer =1, Seller =2
 
@@ -27,7 +27,9 @@ export const addTodo = async (req, res) => {
     });
 
     if (!todo) {
-      return res.status(400).json({ message: "There is no todo item found" });
+      return res
+        .status(400)
+        .json({ message: "There is no todo item found", success: false, todo });
     }
 
     res.status(200).json({ message: "Todo item created", todo });
@@ -175,7 +177,7 @@ export const allTodos = async (req, res) => {
     const totalTodos = await Todo.countDocuments();
 
     if (!todos || todos.length === 0) {
-      return res.status(400).json({ message: "Data not found" });
+      return res.status(400).json({ message: "Data not found", todos });
     }
     res.status(200).json({
       message: "Todo Data",
@@ -210,6 +212,7 @@ export const getProductByBuyerId = async (req, res) => {
       return res.status(400).json({
         message: "No products found.",
         success: false,
+        todos,
       });
     }
 
@@ -228,8 +231,11 @@ export const getProductByBuyerId = async (req, res) => {
 };
 
 export const getProductBySellerId = async (req, res) => {
-  const sid = req.user?.id;
+  const sid = req.params.sid;
   const role = req.user?.role;
+
+  // console.log(req.params);
+  console.log(" Seller ID from url:", sid);
 
   if (!sid) {
     return res.status(401).json({ message: "User not authenticated." });
@@ -237,20 +243,28 @@ export const getProductBySellerId = async (req, res) => {
 
   try {
     const user = await User.findById(sid);
+
     if (!user || role !== "2") {
       return res
         .status(403)
         .json({ message: "Not authorized. Seller role required." });
     }
 
-    const todos = await Todo.find({ SellerId: sid });
-
-    if (!todos || todos.length === 0) {
-      return res
-        .status(404)
-        .json({ message: "No products found for this seller", success: false });
+    if (!mongoose.Types.ObjectId.isValid(sid)) {
+      return res.status(400).json({ message: "Invalid seller ID format" });
     }
 
+    const todos = await Todo.find({
+      SellerId: new mongoose.Types.ObjectId(sid),
+    });
+
+    if (!todos || todos.length === 0) {
+      return res.status(404).json({
+        message: "No products found for this seller",
+        success: false,
+        todos,
+      });
+    }
     res.status(200).json({
       message: "Products retrieved successfully",
       success: true,
