@@ -119,8 +119,8 @@ export const login = async (req, res) => {
         email: user.email,
         name: user.name,
         role: user.role,
+        token: token,
       },
-      token,
     });
   } catch (err) {
     console.log("Error while login", err);

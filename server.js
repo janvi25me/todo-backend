@@ -22,7 +22,7 @@ app.use(
 );
 
 app.use("/api/user", userRoute);
-app.use("/api/todo", todoRoute);
+app.use("/api/product", todoRoute);
 
 // app.use("/", (req, res) => {
 //   res.send("This is home route");

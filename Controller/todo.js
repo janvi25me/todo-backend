@@ -4,18 +4,25 @@ import mongoose from "mongoose";
 
 // role: Buyer =1, Seller =2
 
-export const addTodo = async (req, res) => {
+export const addProduct = async (req, res) => {
   const { name, description, price } = req.body;
   const SellerId = req.user.id;
   const role = req.user.role;
 
-  console.log("Role:", role, "Type:", typeof role);
-  console.log(req.body);
-
   try {
+    // Check if the user is a seller (roleId = 2)
     if (Number(role) !== 2) {
       return res.status(403).json({
         message: "Unauthorized: Only sellers (roleId = 2) can add products",
+      });
+    }
+
+    const existingTodo = await Todo.findOne({ name, SellerId });
+
+    if (existingTodo) {
+      return res.status(400).json({
+        message: "Todo with this name already exists for this seller.",
+        success: false,
       });
     }
 
@@ -27,9 +34,10 @@ export const addTodo = async (req, res) => {
     });
 
     if (!todo) {
-      return res
-        .status(400)
-        .json({ message: "There is no todo item found", success: false, todo });
+      return res.status(400).json({
+        message: "There is no todo item found",
+        success: false,
+      });
     }
 
     res.status(200).json({ message: "Todo item created", todo });
@@ -41,7 +49,7 @@ export const addTodo = async (req, res) => {
   }
 };
 
-export const editTodo = async (req, res) => {
+export const editProduct = async (req, res) => {
   const eid = req.params.eid;
   const userId = req.user.id;
   const userRole = req.user.role;
@@ -86,7 +94,7 @@ export const editTodo = async (req, res) => {
   }
 };
 
-export const deleteTodo = async (req, res) => {
+export const deleteProduct = async (req, res) => {
   const id = req.params.id;
   const userRole = req.user.role;
   //   console.log("ID for delete todo", id);
@@ -115,7 +123,7 @@ export const deleteTodo = async (req, res) => {
   }
 };
 
-export const getTodos = async (req, res) => {
+export const getProducts = async (req, res) => {
   const { id, role } = req.user;
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 5;
@@ -162,10 +170,10 @@ export const getTodos = async (req, res) => {
   }
 };
 
-export const allTodos = async (req, res) => {
+export const allProducts = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 5;
+    const limit = parseInt(req.query.limit) || 3;
 
     const startIndex = (page - 1) * limit;
 
@@ -193,55 +201,74 @@ export const allTodos = async (req, res) => {
   }
 };
 
-export const getProductByBuyerId = async (req, res) => {
-  const { id, role } = req.user;
+export const buyerProducts = async (req, res) => {
+  const bid = req.params?.bid;
+  const role = req.user?.role;
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 3;
+  const startIndex = (page - 1) * limit;
 
   try {
-    let todos;
-
-    if (role === "1") {
-      todos = await Todo.find();
-    } else {
+    if (role !== "1") {
       return res.status(403).json({
         message: "Access denied. Only buyers can fetch products.",
         success: false,
       });
     }
 
-    if (!todos || todos.length === 0) {
+    if (!mongoose.Types.ObjectId.isValid(bid)) {
       return res.status(400).json({
-        message: "No products found.",
+        message: "Invalid buyer ID format.",
         success: false,
-        todos,
       });
     }
+
+    const buyer = await User.findOne({ _id: bid, role: "1" });
+
+    if (!buyer) {
+      return res.status(404).json({
+        message: "No products found for this buyer.",
+        success: false,
+        todos: [],
+      });
+    }
+
+    const todos = await Todo.find()
+      .sort({ createdAt: -1 })
+      .skip(startIndex)
+      .limit(limit);
+
+    const totalTodos = await Todo.countDocuments();
 
     res.status(200).json({
       message: "Products retrieved successfully.",
       success: true,
       todos,
+      totalTodos,
+      page,
+      totalPages: Math.ceil(totalTodos / limit),
     });
   } catch (err) {
-    console.error("Error while getting products", err);
+    console.error("Error while fetching products:", err);
     res.status(500).json({
-      message: "Internal server error",
+      message: "Internal server error.",
       error: err.message,
     });
   }
 };
 
-export const getProductBySellerId = async (req, res) => {
+export const sellerProducts = async (req, res) => {
   const sid = req.params.sid;
   const role = req.user?.role;
-
-  // console.log(req.params);
-  console.log(" Seller ID from url:", sid);
-
-  if (!sid) {
-    return res.status(401).json({ message: "User not authenticated." });
-  }
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 3;
+  const startIndex = (page - 1) * limit;
 
   try {
+    if (!sid) {
+      return res.status(401).json({ message: "User not authenticated." });
+    }
+
     const user = await User.findById(sid);
 
     if (!user || role !== "2") {
@@ -254,21 +281,20 @@ export const getProductBySellerId = async (req, res) => {
       return res.status(400).json({ message: "Invalid seller ID format" });
     }
 
-    const todos = await Todo.find({
-      SellerId: new mongoose.Types.ObjectId(sid),
-    });
+    const todos = await Todo.find({ SellerId: sid })
+      .sort({ createdAt: -1 })
+      .skip(startIndex)
+      .limit(limit);
 
-    if (!todos || todos.length === 0) {
-      return res.status(404).json({
-        message: "No products found for this seller",
-        success: false,
-        todos,
-      });
-    }
+    const totalTodos = await Todo.countDocuments({ SellerId: sid });
+
     res.status(200).json({
       message: "Products retrieved successfully",
       success: true,
       todos,
+      totalTodos,
+      page,
+      totalPages: Math.ceil(totalTodos / limit),
     });
   } catch (err) {
     console.error("Error while getting products by seller ID", err);

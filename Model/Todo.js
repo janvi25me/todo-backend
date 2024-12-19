@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 const todoSchema = new mongoose.Schema({
-  name: { type: String, required: true },
+  name: { type: String, required: true, unique: true },
   description: { type: String },
   price: { type: Number, required: true },
   SellerId: {
@@ -11,5 +11,7 @@ const todoSchema = new mongoose.Schema({
   },
   createdAt: { type: Date, default: Date.now },
 });
+
+todoSchema.index({ name: 1 }, { unique: true });
 
 export const Todo = mongoose.model("Todo", todoSchema);
