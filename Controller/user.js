@@ -1,83 +1,101 @@
 import { User } from "../Model/User.js";
-import { userValidationSchema } from "../Model/User.js";
+import { validateUserData } from "../Model/User.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 
 //validation with zod
-const validateUserData = (data) => {
-  if (!data.email || !data.password) {
-    return {
-      valid: false,
-      errors: [{ message: "Email and password are required" }],
-    };
+const userValidation = ({ email, password }) => {
+  const errors = {};
+  let valid = true;
+
+  if (!email || !/^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/.test(email)) {
+    errors.email = "Invalid email";
+    valid = false;
   }
 
-  try {
-    userValidationSchema.parse(data);
-    return { valid: true, errors: null };
-  } catch (error) {
-    console.error("Validation error:", error);
-
-    const formattedErrors = Array.isArray(error.errors)
-      ? error.errors.map((err) => ({
-          // field: err.path?.[0] || "unknown",
-          message: err.message || "Validation error",
-        }))
-      : [{ message: "Unexpected validation error" }];
-
-    return { valid: false, errors: formattedErrors };
+  if (!password || password.length < 6) {
+    errors.password = "Password must be at least 6 characters";
+    valid = false;
   }
+
+  // if (!role || (role !== "buyer" && role !== "seller")) {
+  //   errors.role = "Role must be either 'buyer' or 'seller'";
+  //   valid = false;
+  // }
+
+  return { valid, errors };
 };
 
 //user signup
 export const signup = async (req, res) => {
-  const { name, email, password, role } = req.body;
-  // console.log(req.body);
-  const { valid, errors } = validateUserData({
-    name,
-    email,
-    password,
-    role,
-  });
-
-  if (!valid) {
-    return res.status(400).json({ message: "Validation failed", errors });
-  }
-
   try {
-    const existingUser = await User.findOne({ email }, { password: 0 });
-    if (existingUser) {
-      return res.status(400).json({ message: "Email already in use" });
+    // Parse and validate the input
+    const parsed = validateUserData.safeParse(req.body);
+    if (!parsed.success) {
+      const errors = parsed.error.errors.map((err) => ({
+        field: err.path.join("."),
+        message: err.message,
+      }));
+      console.error("Validation errors:", errors);
+      return res.status(400).json({ errors });
     }
 
+    const {
+      email,
+      password,
+      role,
+      firstName,
+      middleName,
+      lastName,
+      shopName,
+      contact,
+      image,
+    } = req.body;
+
+    // Check if the user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      console.error("User already exists:", email);
+      return res.status(400).json({ message: "User already exists" });
+    }
+
+    // Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const user = await User.create({
-      name,
+    // Create a new user instance
+    const newUser = new User({
       email,
       password: hashedPassword,
       role,
+      firstName,
+      middleName,
+      lastName,
+      shopName: role === "2" ? shopName : undefined,
+      contact,
+      image: req.file ? req.file.path.replace(/\\/g, "/") : "",
     });
-    await user.save();
 
-    const token = jwt.sign({ userId: user._id }, "SECRET_KEY", {
-      expiresIn: "1d",
-    });
+    console.log("Image Path:", newUser.image);
+
+    // Save the new user to the database
+    await newUser.save();
 
     res.status(200).json({
-      message: `User registered successfully with ${user.name}`,
+      message: "User created successfully",
       user: {
-        id: user._id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
+        email: newUser.email,
+        role: newUser.role,
+        firstName: newUser.firstName,
+        middleName: newUser.middleName,
+        lastName: newUser.lastName,
+        contact: newUser.contact,
+        shopName: newUser.shopName,
+        image: newUser.image,
       },
-      token,
     });
-  } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Registration failed", error: error.message });
+  } catch (err) {
+    console.error("Error during signup:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -85,7 +103,7 @@ export const signup = async (req, res) => {
 export const login = async (req, res) => {
   const { email, password, role } = req.body;
   // console.log(req.body);
-  const { valid, errors } = validateUserData({ email, password, role });
+  const { valid, errors } = userValidation({ email, password, role });
 
   if (!valid) {
     return res.status(400).json({
@@ -96,6 +114,7 @@ export const login = async (req, res) => {
 
   try {
     const user = await User.findOne({ email });
+    // console.log("!", user.firstName);
     if (!user) {
       return res.status(400).json({ message: "Invalid email or password" });
     }
@@ -112,17 +131,73 @@ export const login = async (req, res) => {
     );
 
     res.status(200).json({
-      message: `Welcome ${user.name}`,
+      message: `Welcome ${user.firstName}`,
 
       user: {
         id: user._id,
         email: user.email,
-        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
         role: user.role,
         token: token,
       },
+      token,
     });
+    // console.log(user);
   } catch (err) {
     console.log("Error while login", err);
+  }
+};
+
+export const profile = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    // console.log("userId", userId);
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (req.file) {
+      user.image = req.file.path;
+    }
+
+    // console.log("Image", user.image);
+    user.firstName = req.body.firstName || user.firstName;
+    user.lastName = req.body.lastName || user.lastName;
+
+    await user.save();
+
+    // console.log("Image", user.image);
+
+    res.status(200).json({
+      email: user.email,
+      image: user.image,
+      firstName: user.firstName,
+      lastName: user.lastName,
+    });
+  } catch (error) {
+    console.error("Error updating profile:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const getProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    res.json({
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      image: user.image,
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch profile" });
   }
 };
