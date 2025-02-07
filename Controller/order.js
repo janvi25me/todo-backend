@@ -51,7 +51,7 @@ export const createOrder = async (req, res) => {
     const myAddress = await Address.findOne({
       buyerId,
       isDefault: true,
-    }).select("myAddress");
+    }).select("_id myAddress");
 
     if (!myAddress) {
       return res.status(404).json({
@@ -89,6 +89,9 @@ export const createOrder = async (req, res) => {
 
     await order.save();
 
+    //update cart with empty items after creating an order
+    // await Cart.updateOne({ buyerId }, { $set: { items: [] } });
+
     res.status(200).json({
       message: "Order created successfully.",
       success: true,
@@ -105,7 +108,8 @@ export const createOrder = async (req, res) => {
 
 export const buyerOrders = async (req, res) => {
   try {
-    const { from, to, orderStatus, seek_id } = req.query;
+    const { from, to, includesOrderStatuses, excludesOrderStatuses } =
+      req.query;
     const { role, id } = req.user;
 
     if (role !== "1") {
@@ -116,54 +120,50 @@ export const buyerOrders = async (req, res) => {
     }
 
     const filters = { buyerInfo: id };
-
-    // seek_id filter logic
-    if (seek_id && seek_id !== "null" && seek_id !== "undefined") {
-      if (!mongoose.Types.ObjectId.isValid(seek_id)) {
-        return res.status(400).json({ message: "Invalid seek_id format." });
-      }
-      filters._id = { $lt: new mongoose.Types.ObjectId(seek_id) };
-    }
-
-    const now = moment.utc().toDate();
+    const today = moment.utc().startOf("day").toDate();
     let fromDate, toDate;
 
-    if (from && to) {
-      if (
-        !moment(from, "DD-MM-YYYY", true).isValid() ||
-        !moment(to, "DD-MM-YYYY", true).isValid()
-      ) {
+    let excludeStatusesArray = [];
+    if (excludesOrderStatuses) {
+      excludeStatusesArray = excludesOrderStatuses.split(",");
+    }
+
+    if (includesOrderStatuses && includesOrderStatuses.length > 0) {
+      filters.orderStatus = { $in: includesOrderStatuses };
+    } else if (excludeStatusesArray.length > 0) {
+      filters.orderStatus = { $nin: excludeStatusesArray };
+    } else {
+      filters.orderStatus = { $nin: ["CANCELLED", "COMPLETED"] };
+    }
+
+    if (from) {
+      if (!moment(from, "DD-MM-YYYY", true).isValid()) {
         return res.status(400).json({
           success: false,
           message: "Invalid date format. Use DD-MM-YYYY.",
         });
       }
-
       fromDate = moment.utc(from, "DD-MM-YYYY").startOf("day").toDate();
-      toDate = moment.utc(to, "DD-MM-YYYY").endOf("day").toDate();
-
-      if (toDate > now) {
-        toDate = now;
-      }
-
-      if (fromDate > toDate) {
-        [fromDate, toDate] = [toDate, fromDate]; // Swap if out of order
-      }
-
-      filters.createdAt = { $gte: fromDate, $lte: toDate };
-    } else {
-      filters.createdAt = { $lte: now };
     }
 
-    const allowedStatuses = [
-      "PENDING",
-      "CONFIRM",
-      "CANCEL",
-      "COMPLETED",
-      "IN_TRANSIT",
-    ];
-    if (orderStatus && allowedStatuses.includes(orderStatus.toUpperCase())) {
-      filters.orderStatus = orderStatus.toUpperCase();
+    if (to) {
+      if (!moment(to, "DD-MM-YYYY", true).isValid()) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid date format. Use DD-MM-YYYY.",
+        });
+      }
+      toDate = moment.utc(to, "DD-MM-YYYY").endOf("day").toDate();
+    } else {
+      toDate = today;
+    }
+
+    if (fromDate && toDate) {
+      filters.createdAt = { $gte: fromDate, $lte: toDate };
+    } else if (fromDate) {
+      filters.createdAt = { $gte: fromDate };
+    } else if (toDate) {
+      filters.createdAt = { $lte: toDate };
     }
 
     const orders = await Order.find(filters);
@@ -177,7 +177,6 @@ export const buyerOrders = async (req, res) => {
       });
     }
 
-    // Enrich orders
     const enrichedOrders = await Promise.all(
       orders.map(async (order) => {
         const buyerInfo = await User.findById(order.buyerInfo).select(
@@ -211,6 +210,152 @@ export const buyerOrders = async (req, res) => {
       count: enrichedOrders.length,
       orders: enrichedOrders,
     });
+  } catch (error) {
+    console.error("Error fetching orders:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch orders",
+      error: error.message,
+    });
+  }
+};
+
+// export const buyerOrders = async (req, res) => {
+//   try {
+//     const { from, to, orderStatus } = req.query; // Capture `orderStatus` from query
+//     const { role, id } = req.user;
+
+//     if (role !== "1") {
+//       return res.status(403).json({
+//         success: false,
+//         message: "Access denied. Only buyers can view orders.",
+//       });
+//     }
+
+//     const filters = { buyerInfo: id };
+//     const today = moment.utc().startOf("day").toDate();
+//     let fromDate, toDate;
+
+//     // Handle `orderStatus` filter for specific values: "COMPLETED" or "CANCELLED"
+//     if (
+//       orderStatus &&
+//       ["COMPLETED", "CANCELLED"].includes(orderStatus.toUpperCase())
+//     ) {
+//       filters.orderStatus = orderStatus.toUpperCase(); // Set the filter for completed or cancelled
+//     } else {
+//       // Keep the default filter for non-completed, non-cancelled orders
+//       filters.orderStatus = { $nin: ["CANCELLED", "COMPLETED"] };
+//     }
+
+//     if (to) {
+//       if (!moment(to, "DD-MM-YYYY", true).isValid()) {
+//         return res.status(400).json({
+//           success: false,
+//           message: "Invalid date format. Use DD-MM-YYYY.",
+//         });
+//       }
+
+//       toDate = moment.utc(to, "DD-MM-YYYY").endOf("day").toDate();
+
+//       if (moment.utc(toDate).isSame(today, "day")) {
+//         console.log("Fetching Today's Orders");
+//         filters.createdAt = { $gte: today, $lte: toDate };
+//       } else {
+//         console.log("Fetching Past Orders");
+
+//         // Set `fromDate` to the earliest order date in the DB if `from` is not provided
+//         fromDate = from
+//           ? moment.utc(from, "DD-MM-YYYY").startOf("day").toDate()
+//           : await Order.findOne({ buyerInfo: id })
+//               .sort({ createdAt: 1 })
+//               .select("createdAt");
+
+//         if (fromDate && fromDate.createdAt) fromDate = fromDate.createdAt;
+
+//         filters.createdAt = { $gte: fromDate, $lte: toDate };
+//       }
+//     }
+
+//     console.log("Final Filters:", JSON.stringify(filters, null, 2));
+//     const orders = await Order.find(filters);
+//     console.log("Orders Found:", orders.length);
+
+//     if (!orders.length) {
+//       return res.status(200).json({
+//         success: true,
+//         count: 0,
+//         orders: [],
+//         message: "No orders found for the given filters.",
+//       });
+//     }
+
+//     const enrichedOrders = await Promise.all(
+//       orders.map(async (order) => {
+//         const buyerInfo = await User.findById(order.buyerInfo).select(
+//           "firstName lastName email contact"
+//         );
+//         const address = await Address.findById(order.address).select(
+//           "myAddress"
+//         );
+
+//         const products = await Promise.all(
+//           order.products.map(async (item) => {
+//             const product = await Product.findById(item.productId).select(
+//               "description SellerId"
+//             );
+//             return product
+//               ? {
+//                   ...item.toObject(),
+//                   description: product.description,
+//                   SellerId: product.SellerId,
+//                 }
+//               : item;
+//           })
+//         );
+
+//         return { ...order.toObject(), buyerInfo, address, products };
+//       })
+//     );
+
+//     res.status(200).json({
+//       success: true,
+//       count: enrichedOrders.length,
+//       orders: enrichedOrders,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching orders:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch orders",
+//       error: error.message,
+//     });
+//   }
+// };
+
+export const sellerOrders = async (req, res) => {
+  try {
+    const { from, to, orderStatus, seek_id } = req.query;
+    const { role, id } = req.user;
+
+    if (role !== "1") {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Only buyers can view orders.",
+      });
+    }
+
+    const filters = { buyerInfo: id };
+
+    // seek_id filter logic
+    if (seek_id && seek_id !== "null" && seek_id !== "undefined") {
+      if (!mongoose.Types.ObjectId.isValid(seek_id)) {
+        return res.status(400).json({ message: "Invalid seek_id format." });
+      }
+      filters._id = { $gt: new mongoose.Types.ObjectId(seek_id) };
+    }
+
+    const now = moment.utc().toDate();
+    let fromDate, toDate;
   } catch (error) {
     console.error("Error fetching orders:", error);
     res.status(500).json({

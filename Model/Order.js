@@ -18,10 +18,10 @@ const orderSchema = new mongoose.Schema({
   //     required: true,
   //   },
   address: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Address",
+    type: Object,
     required: true,
   },
+
   products: [
     {
       productId: {
