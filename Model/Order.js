@@ -4,7 +4,7 @@ const orderSchema = new mongoose.Schema({
   orderStatus: {
     type: String,
     required: true,
-    enum: ["PENDING", "CONFIRM", "CANCELLED", "COMPLETED", "IN_TRANSIT"],
+    enum: ["PENDING", "CANCELLED", "COMPLETED", "IN_TRANSIT"],
     default: "PENDING",
   },
   buyerInfo: {
@@ -12,18 +12,24 @@ const orderSchema = new mongoose.Schema({
     ref: "User",
     required: true,
   },
-  //   sellerInfo: {
-  //     type: mongoose.Schema.Types.ObjectId,
-  //     ref: "User",
-  //     required: true,
-  //   },
+  sellerInfo: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+  },
   address: {
     type: Object,
     required: true,
   },
+  deliveryStatus: {
+    type: String,
+    required: true,
+    enum: ["PROCESSING", "READY_TO_SHIP", "OUT_FOR_DELIVERY", "DELIVERED"],
+    default: "PROCESSING",
+  },
 
   products: [
     {
+      _id: false,
       productId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Product",
@@ -33,7 +39,6 @@ const orderSchema = new mongoose.Schema({
       price: { type: Number, required: true },
       qty: { type: Number, required: true, min: 1 },
       image: { type: String },
-      // totalPrice: { type: Number, required: true },
     },
   ],
   noOfProducts: { type: Number, default: 0 },

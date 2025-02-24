@@ -6,15 +6,22 @@ import cors from "cors";
 import bodyParser from "body-parser";
 import userRoute from "./Routes/userRoute.js";
 import productRoute from "./Routes/productRoute.js";
-import cartRoute from "./Routes/cart.js";
+import cartRoute from "./Routes/cartRoute.js";
 import addressRoute from "./Routes/addressRoute.js";
 import orderRoute from "./Routes/orderRoute.js";
-
-const app = express();
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+import paymentRoute from "./Routes/paymentRoute.js";
+import webhookRoute from "./Routes/webhookRoute.js";
 
 dotenv.config();
+
+const app = express();
+
+// Apply raw body parser **only** for Stripe webhook route BEFORE other body parsers
+app.use("/webhook", express.raw({ type: "application/json" }));
+
+app.use(express.json());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
 app.use(
   cors({
@@ -38,6 +45,13 @@ app.use("/api/product", productRoute);
 app.use("/api/product/cart", cartRoute);
 app.use("/api/address", addressRoute);
 app.use("/api/order", orderRoute);
+app.use("/api/payment", paymentRoute);
+app.use("/webhook", webhookRoute);
+
+const PORT = process.env.PORT || 1000;
+app.listen(PORT, () => {
+  console.log(`Server is started on ${PORT}`);
+});
 
 app.use("/mobile", (req, res) => {
   res.send([
@@ -95,8 +109,4 @@ app.use("/well-known", (req, res) => {
       },
     }),
   ]);
-});
-
-app.listen(process.env.PORT || 1000, () => {
-  console.log(`Server is started on ${process.env.PORT}`);
 });

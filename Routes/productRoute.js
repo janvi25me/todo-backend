@@ -9,11 +9,16 @@ import {
   sellerProducts,
   sellerProductsBySeekId,
   //   getAllProducts,
-} from "../Controller/product.js";
+} from "../Controller/productController.js";
 import { Authenticated } from "../Middleware/Auth.js";
 import { fileUploadProduct } from "../Middleware/file-upload.js";
 
 const router = express.Router();
+
+router.get("/all", Authenticated, allProducts);
+router.get("/buyer/:bid", Authenticated, buyerProducts);
+router.get("/seller/v1/:sid", Authenticated, sellerProducts);
+router.get("/seller/:sid", Authenticated, sellerProductsBySeekId);
 
 router.post(
   "/add",
@@ -25,13 +30,5 @@ router.post(
 router.patch("/edit/:eid", Authenticated, editProduct); // api/todo/edit/65364654354
 
 router.delete("/:id", Authenticated, deleteProduct);
-
-router.get("/all", Authenticated, allProducts);
-
-router.get("/buyer/:bid", Authenticated, buyerProducts);
-
-router.get("/seller/v1/:sid", Authenticated, sellerProducts);
-
-router.get("/seller/:sid", Authenticated, sellerProductsBySeekId);
 
 export default router;

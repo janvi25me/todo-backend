@@ -6,16 +6,15 @@ import {
   editUserAddress,
   deleteUserAddress,
   updateDefaultAddress,
-} from "../Controller/address.js";
+} from "../Controller/addressController.js";
 
 const router = express.Router();
 
-router.post("/addAddress", Authenticated, addUserAddress);
-
 router.get("/getAddress", Authenticated, getUserAddress);
 
-router.patch("/editAddress/:eid", Authenticated, editUserAddress);
+router.post("/addAddress", Authenticated, addUserAddress);
 
+router.patch("/editAddress/:eid", Authenticated, editUserAddress);
 router.patch("/updateDefaultAddress/:aid", Authenticated, updateDefaultAddress);
 
 router.delete("/deleteAddress/:rid", Authenticated, deleteUserAddress);

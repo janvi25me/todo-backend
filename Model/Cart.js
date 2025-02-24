@@ -11,6 +11,11 @@ const cartItemsSchema = new mongoose.Schema({
   price: { type: Number, required: true },
   qty: { type: Number, required: true },
   image: { type: String },
+  // sellerId: {
+  //   type: mongoose.Schema.Types.ObjectId,
+  //   ref: "User",
+  //   required: true,
+  // },
 });
 
 const cartSchema = new mongoose.Schema({
@@ -28,10 +33,3 @@ const cartSchema = new mongoose.Schema({
 });
 
 export const Cart = mongoose.model("Cart", cartSchema);
-
-// {
-//     p_id: "",
-//     buyerId: "",
-//     qty: 0,
-//     createdAt: "",
-//   },
