@@ -22,7 +22,7 @@ const calculateCartTotals = (cartItems) => {
 export const createOrder = async (req, res) => {
   const buyerId = req?.user?.id;
   const role = req?.user?.role;
-  //   console.log("?", buyerId);
+
   try {
     if (role === "2") {
       return res.status(503).json({
@@ -38,18 +38,17 @@ export const createOrder = async (req, res) => {
         success: false,
       });
     }
-    // console.log("))", cart);
 
     const buyerInfo = await User.findById(buyerId).select(
       "firstName middleName lastName email role contact"
     );
+
     if (!buyerInfo) {
       return res.status(404).json({
         message: "Buyer information not found.",
         success: false,
       });
     }
-    // console.log("%%", buyerInfo);
 
     const myAddress = await Address.findOne({
       buyerId,
@@ -62,15 +61,36 @@ export const createOrder = async (req, res) => {
         success: false,
       });
     }
+    const orderProducts = await Promise.all(
+      cart.items.map(async (item) => {
+        const product = await Product.findById(item.productId).select(
+          "SellerId"
+        );
 
-    const orderProducts = cart.items.map((item) => ({
-      productId: item.productId,
-      name: item.name,
-      price: item.price,
-      qty: item.qty,
-      image: item.image,
-      totalPrice: item.price * item.qty,
-    }));
+        if (!product) {
+          throw new Error(`Product not found for ID: ${item.productId}`);
+        }
+
+        if (!product.SellerId) {
+          throw new Error(
+            `Seller ID missing for product ID: ${item.productId}. Please check the product data.`
+          );
+        }
+
+        // console.log("SellerID in createOrder", product.SellerId);
+
+        return {
+          productId: item.productId,
+          SellerId: product.SellerId, // Map SellerId to sellerId
+          name: item.name,
+          price: item.price,
+          qty: item.qty,
+          image: item.image,
+          totalPrice: item.price * item.qty,
+          productStatus: item.productStatus,
+        };
+      })
+    );
 
     const { subTotal, total, delivery, noOfProducts } = calculateCartTotals(
       cart.items
@@ -79,7 +99,6 @@ export const createOrder = async (req, res) => {
     const order = new Order({
       orderStatus: "PENDING",
       buyerInfo: buyerInfo,
-      //   sellerInfo: buyerInfo._id,
       address: myAddress,
       products: orderProducts,
       subtotal: subTotal,
@@ -88,11 +107,10 @@ export const createOrder = async (req, res) => {
       noOfProducts: noOfProducts,
     });
 
-    // console.log("Order Details", order);
+    // console.log("#", orderProducts);
 
     await order.save();
 
-    // update cart with empty items after creating an order
     await Cart.updateOne({ buyerId }, { $set: { items: [] } });
 
     res.status(200).json({
@@ -105,19 +123,20 @@ export const createOrder = async (req, res) => {
     return res.status(500).json({
       message: "An error occurred while creating the order.",
       success: false,
+      error: error.message,
     });
   }
 };
 
 export const fetchOrders = async (req, res) => {
-  const buyerId = req?.user?.id;
+  const userId = req?.user?.id;
   const role = req?.user?.role;
   const orderId = req.params.orderId;
 
   try {
-    if (role === "2") {
+    if (role !== "1" && role !== "2") {
       return res.status(403).json({
-        message: "Only buyers can view orders.",
+        message: "Unauthorized access.",
         success: false,
       });
     }
@@ -129,7 +148,6 @@ export const fetchOrders = async (req, res) => {
       });
     }
 
-    // Fetch order details
     const order = await Order.findOne({ _id: orderId }).select(
       "orderStatus deliveryStatus subtotal delivery total createdAt products noOfProducts buyerInfo address"
     );
@@ -141,42 +159,98 @@ export const fetchOrders = async (req, res) => {
       });
     }
 
-    // Fetch payment details for the order
-    const payment = await Payment.findOne({ orderId }).select("paymentStatus");
+    // console.log("%", order);
 
-    // Fetch buyer info
+    const payment = await Payment.findOne({ orderId }).select("paymentStatus");
     const buyerInfo = order.buyerInfo
       ? await User.findById(order.buyerInfo).select(
           "firstName middleName lastName email contact"
         )
       : null;
 
-    // Fetch address details
+    // console.log("^", payment);
+
     const address = order.address
       ? await Address.findById(order.address).select("myAddress")
       : null;
 
-    // Fetch product details for each product in the order
-    const orderWithProducts = await Promise.all(
-      order.products.map(async (productItem) => {
-        const product = await Product.findById(productItem.productId).select(
-          "name price image qty description"
-        );
+    // Filter products based on role
+    let filteredProducts = [];
 
-        return {
-          ...product.toObject(),
-          qty: productItem.qty,
-          totalPrice: productItem.totalPrice,
-        };
-      })
-    );
+    if (role === "1") {
+      // Buyer - See all products
+      filteredProducts = await Promise.all(
+        order.products.map(async (productItem) => {
+          const product = await Product.findById(productItem.productId).select(
+            "name price image qty  "
+          );
 
-    // Merge the order data with related data
+          if (!product) {
+            return {
+              productId: productItem.productId,
+              productNotFound: true,
+              qty: productItem.qty,
+              totalPrice: productItem.totalPrice,
+            };
+          }
+          // console.log("$", product);
+          return {
+            ...product.toObject(),
+            qty: productItem.qty,
+            totalPrice: productItem.totalPrice,
+            productStatus: productItem.productStatus,
+            deliveryOtp: productItem.deliveryOtp,
+          };
+        })
+      );
+    } else if (role === "2") {
+      // console.log("Order products:", order.products);
+      // console.log("Seller ID from auth:", userId);
+
+      // console.log("$", order);
+      filteredProducts = await Promise.all(
+        order.products
+          .filter((productItem) => {
+            return productItem.SellerId?.equals(userId);
+          })
+
+          .map(async (productItem) => {
+            const product = await Product.findById(
+              productItem.productId
+            ).select("name price image qty description productStatus");
+
+            // console.log("$#%", order.products);
+
+            if (!product) {
+              return {
+                productId: productItem.productId,
+                productNotFound: true,
+                qty: productItem.qty,
+                totalPrice: productItem.totalPrice,
+              };
+            }
+
+            // console.log("Seller ID from auth:", userId);
+            // console.log(
+            //   "Filtered Product's sellerId:",
+            //   productItem?.SellerId?.toString()
+            // );
+
+            return {
+              ...product.toObject(),
+              qty: productItem.qty,
+              totalPrice: productItem.totalPrice,
+              productStatus: productItem.productStatus,
+              deliveryOtp: productItem.deliveryOtp,
+            };
+          })
+      );
+    }
     const orderDetails = {
       ...order.toObject(),
       buyerInfo,
       address,
-      products: orderWithProducts,
+      products: filteredProducts,
       paymentStatus: payment ? payment.paymentStatus : "PENDING",
     };
 
@@ -345,12 +419,9 @@ export const sellerOrders = async (req, res) => {
       includesOrderStatuses,
       excludesOrderStatuses,
       page = 1,
-      limit = 5,
+      limit = 10,
     } = req.query;
-
     const { role, id } = req.user;
-
-    console.log("Seller ID:", id);
 
     if (role !== "2") {
       return res.status(403).json({
@@ -359,34 +430,21 @@ export const sellerOrders = async (req, res) => {
       });
     }
 
-    // Build initial filters
-    const filters = { sellerInfo: new mongoose.Types.ObjectId(id) };
+    // Convert seller ID to ObjectId
+    const sellerObjectId = new mongoose.Types.ObjectId(id);
 
-    const today = moment.utc().startOf("day").toDate();
+    const filters = { "products.SellerId": sellerObjectId };
     let fromDate, toDate;
 
-    let includeStatusesArray = [];
-    if (includesOrderStatuses) {
-      includeStatusesArray = Array.isArray(includesOrderStatuses)
-        ? includesOrderStatuses
-        : includesOrderStatuses.split(",");
-    }
+    let includeStatusesArray = includesOrderStatuses?.split(",") || [];
+    let excludeStatusesArray = excludesOrderStatuses?.split(",") || [];
 
-    let excludeStatusesArray = [];
-    if (excludesOrderStatuses) {
-      excludeStatusesArray = Array.isArray(excludesOrderStatuses)
-        ? excludesOrderStatuses
-        : excludesOrderStatuses.split(",");
-    }
-
-    // Handle order statuses
     if (includeStatusesArray.length > 0) {
       filters.orderStatus = { $in: includeStatusesArray };
     } else if (excludeStatusesArray.length > 0) {
       filters.orderStatus = { $nin: excludeStatusesArray };
     }
 
-    // Handle date filtering
     if (from) {
       if (!moment(from, "DD-MM-YYYY", true).isValid()) {
         return res.status(400).json({
@@ -405,8 +463,6 @@ export const sellerOrders = async (req, res) => {
         });
       }
       toDate = moment.utc(to, "DD-MM-YYYY").endOf("day").toDate();
-    } else {
-      toDate = today;
     }
 
     if (fromDate && toDate) {
@@ -417,12 +473,10 @@ export const sellerOrders = async (req, res) => {
       filters.createdAt = { $lte: toDate };
     }
 
-    // Pagination
     const pageNumber = parseInt(page, 10) || 1;
     const limitNumber = parseInt(limit, 10) || 10;
     const skip = (pageNumber - 1) * limitNumber;
 
-    // Fetch orders
     const totalOrders = await Order.countDocuments(filters);
     const totalPages = Math.ceil(totalOrders / limitNumber);
 
@@ -438,44 +492,183 @@ export const sellerOrders = async (req, res) => {
         totalPages: 0,
         currentPage: pageNumber,
         orders: [],
-        message: "No orders found for the given filters.",
+        message: "No orders found for this seller with the given filters.",
       });
     }
 
-    // Fetch Seller Information
-    const sellerInfo = await User.findById(id).select(
-      "firstName lastName email contact"
-    );
+    // Ensure only products of the current seller are returned
+    const filteredOrders = orders
+      .map((order) => ({
+        ...order.toObject(),
+        products: order.products.filter(
+          (product) => product.SellerId.toString() === sellerObjectId.toString()
+        ),
+      }))
+      .filter((order) => order.products.length > 0);
 
-    // Enrich orders with seller and address info
-    const enrichedOrders = orders.map((order) => {
-      const address = order.address.myAddress || "";
-      const sellerProducts = order.products || [];
-
-      return {
-        orderId: order._id,
-        orderStatus: order.orderStatus,
-        sellerInfo,
-        address,
-        products: sellerProducts,
-      };
-    });
-
-    console.log("Seller Orders", enrichedOrders);
+    // console.log("Filtered seller orders", filteredOrders);
 
     res.status(200).json({
       success: true,
-      count: enrichedOrders.length,
+      count: filteredOrders.length,
       totalOrders,
       totalPages,
       currentPage: pageNumber,
-      orders: enrichedOrders,
+      orders: filteredOrders,
     });
   } catch (error) {
     console.error("Error fetching seller orders:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to fetch orders",
+      message: "Failed to fetch seller orders",
+      error: error.message,
+    });
+  }
+};
+
+export const updateOrderDetails = async (req, res) => {
+  const { orderId, action, productId } = req.body;
+  const role = req?.user?.role;
+  const otp = Math.floor(100000 + Math.random() * 900000);
+  try {
+    if (role !== "2") {
+      return res.status(403).json({
+        message: "Only sellers can update order details.",
+        success: false,
+      });
+    }
+    try {
+      const updatedOrder = await Order.findOneAndUpdate(
+        { _id: orderId, "products.productId": { $in: productId } },
+        {
+          $set: {
+            "products.$[elem].productStatus": action,
+            "products.$[elem].deliveryOtp": otp,
+          },
+        },
+        {
+          arrayFilters: [{ "elem.productId": { $in: productId } }],
+          new: true,
+        }
+      );
+
+      if (!updatedOrder) {
+        return res.status(200).json({
+          message: "Order not found.",
+          success: false,
+        });
+      }
+
+      //check if all product status is complete then update main status
+      const allStatuses = updatedOrder.products.map(
+        (product) => product.productStatus
+      );
+
+      const uniqueStatuses = [...new Set(allStatuses)];
+
+      if (uniqueStatuses.length === 1) {
+        const unifiedStatus = uniqueStatuses[0];
+
+        // Update the orderStatus if all products have the same status
+        if (["IN_TRANSIT", "COMPLETED"].includes(unifiedStatus)) {
+          updatedOrder.orderStatus = unifiedStatus;
+          await updatedOrder.save();
+        }
+      }
+      // console.log("Updated Order", updatedOrder);
+      return res.status(200).json({
+        message: "Order Updated.",
+        success: true,
+      });
+    } catch (error) {
+      res.status(500).json({
+        message: "An error occurred while updating order details.",
+        success: false,
+        error: error.message,
+      });
+    }
+  } catch (error) {
+    console.error("Error in updateOrderDetails:", error);
+    res.status(500).json({
+      message: "An error occurred while updating order details.",
+      success: false,
+      error: error.message,
+    });
+  }
+};
+export const verifyOtp = async (req, res) => {
+  const { orderId, productId, otp } = req.body;
+  const role = req?.user?.role;
+
+  try {
+    if (role !== "2") {
+      return res.status(403).json({
+        message: "Only sellers can verify OTP details.",
+        success: false,
+      });
+    }
+
+    // OTP validation
+    const otpRegex = /^\d{6}$/;
+    if (!otpRegex.test(otp)) {
+      return res.status(400).json({
+        message: "Invalid OTP format. OTP must be exactly 6 digits.",
+        success: false,
+      });
+    }
+
+    const order = await Order.findOne({
+      _id: orderId,
+      "products.productId": productId,
+      "products.deliveryOtp": otp,
+    });
+
+    if (!order) {
+      return res.status(400).json({
+        message: "Invalid OTP",
+        success: false,
+      });
+    }
+
+    // Check payment status in the payment collection using orderId
+    const payment = await Payment.findOne({ orderId: order._id });
+
+    if (!payment) {
+      return res.status(404).json({
+        message: "Payment record not found.",
+        success: false,
+      });
+    }
+
+    if (payment.paymentStatus !== "SUCCESS") {
+      return res.status(400).json({
+        message: "Payment status is not successful.",
+        success: false,
+      });
+    }
+
+    // Update order status to COMPLETED
+    await Order.updateOne(
+      { _id: orderId },
+      { $set: { orderStatus: "COMPLETED" } }
+    );
+
+    // Update product status to COMPLETED
+    await Order.updateOne(
+      { _id: orderId, "products.productId": productId },
+      { $set: { "products.$.productStatus": "COMPLETED" } }
+    );
+
+    return res.status(200).json({
+      message: "OTP verified, order and product completed.",
+      success: true,
+    });
+  } catch (error) {
+    console.error("Error in verifyOtp:", error);
+    res.status(500).json({
+      message:
+        "An error occurred while verifying OTP and updating order/product status.",
+      success: false,
       error: error.message,
     });
   }

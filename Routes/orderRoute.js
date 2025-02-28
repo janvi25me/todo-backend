@@ -4,6 +4,8 @@ import {
   fetchOrders,
   buyerOrders,
   sellerOrders,
+  updateOrderDetails,
+  verifyOtp,
 } from "../Controller/orderController.js";
 import { Authenticated } from "../Middleware/Auth.js";
 
@@ -14,5 +16,8 @@ router.get("/buyerOrders", Authenticated, buyerOrders);
 router.get("/sellerOrders", Authenticated, sellerOrders);
 
 router.post("/createOrder", Authenticated, createOrder);
+router.post("/verifyOtp", Authenticated, verifyOtp);
+
+router.patch("/update", Authenticated, updateOrderDetails);
 
 export default router;

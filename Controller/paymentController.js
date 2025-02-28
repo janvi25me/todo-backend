@@ -76,6 +76,9 @@ export const checkout = async (req, res) => {
       success_url: "http://localhost:5173/success",
       cancel_url: "http://localhost:5173/cancel",
       metadata: metadata,
+      payment_intent_data: {
+        metadata: metadata,
+      },
     });
 
     // Save Payment with PENDING status
