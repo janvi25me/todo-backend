@@ -2,6 +2,7 @@ import { User } from "../Model/User.js";
 import { validateUserData } from "../Model/User.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import { statusCodeResponse } from "../helpers/statusCodeResponse.js";
 
 //validation with zod
 const userValidation = ({ email, password }) => {
@@ -37,7 +38,10 @@ export const signup = async (req, res) => {
         message: err.message,
       }));
       console.error("Validation errors:", errors);
-      return res.status(400).json({ errors });
+      return res.status(statusCodeResponse.badRequest.code).json({
+        message: statusCodeResponse.badRequest.message,
+        errors,
+      });
     }
 
     const {
@@ -56,7 +60,9 @@ export const signup = async (req, res) => {
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       console.error("User already exists:", email);
-      return res.status(400).json({ message: "User already exists" });
+      return res
+        .status(statusCodeResponse.conflict.code)
+        .json({ message: statusCodeResponse.conflict.message });
     }
 
     // Hash the password
@@ -80,8 +86,8 @@ export const signup = async (req, res) => {
     // Save the new user to the database
     await newUser.save();
 
-    res.status(200).json({
-      message: "User created successfully",
+    res.status(statusCodeResponse.created.code).json({
+      message: statusCodeResponse.created.message,
       user: {
         email: newUser.email,
         role: newUser.role,
@@ -95,33 +101,40 @@ export const signup = async (req, res) => {
     });
   } catch (err) {
     console.error("Error during signup:", err);
-    res.status(500).json({ message: "Server error" });
+    res
+      .status(statusCodeResponse.serverError.code)
+      .json({ message: statusCodeResponse.serverError.message });
   }
 };
 
 //user login
 export const login = async (req, res) => {
   const { email, password, role } = req.body;
-  // console.log(req.body);
+
+  // Validate input
   const { valid, errors } = userValidation({ email, password, role });
 
   if (!valid) {
-    return res.status(400).json({
-      message: "Validation failed",
+    return res.status(statusCodeResponse.badRequest.code).json({
+      message: statusCodeResponse.badRequest.message,
       errors: errors,
     });
   }
 
   try {
     const user = await User.findOne({ email });
-    // console.log("!", user.firstName);
+
     if (!user) {
-      return res.status(400).json({ message: "Invalid email or password" });
+      return res.status(statusCodeResponse.unauthorized.code).json({
+        message: "Invalid email or password",
+      });
     }
 
     const isPasswordCorrect = await bcrypt.compare(password, user.password);
     if (!isPasswordCorrect) {
-      return res.status(400).json({ message: "Invalid email or password" });
+      return res.status(statusCodeResponse.unauthorized.code).json({
+        message: "Invalid email or password",
+      });
     }
 
     const token = jwt.sign(
@@ -130,9 +143,8 @@ export const login = async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    res.status(200).json({
+    res.status(statusCodeResponse.success.code).json({
       message: `Welcome ${user.firstName}`,
-
       user: {
         id: user._id,
         email: user.email,
@@ -140,12 +152,15 @@ export const login = async (req, res) => {
         lastName: user.lastName,
         role: user.role,
         token: token,
+        image: user.image,
       },
       token,
     });
-    // console.log(user);
   } catch (err) {
     console.log("Error while login", err);
+    res.status(statusCodeResponse.serverError.code).json({
+      message: statusCodeResponse.serverError.message,
+    });
   }
 };
 
@@ -153,7 +168,9 @@ export const profile = async (req, res) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
-      return res.status(401).json({ message: "Unauthorized" });
+      return res
+        .status(statusCodeResponse.unauthorized.code)
+        .json({ message: statusCodeResponse.unauthorized.message });
     }
 
     // console.log("userId", userId);
@@ -161,7 +178,9 @@ export const profile = async (req, res) => {
     const user = await User.findById(userId);
 
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res
+        .status(statusCodeResponse.notFound.code)
+        .json({ message: statusCodeResponse.notFound.message });
     }
 
     if (req.file) {
@@ -176,7 +195,7 @@ export const profile = async (req, res) => {
 
     // console.log("Image", user.image);
 
-    res.status(200).json({
+    res.status(statusCodeResponse.success.code).json({
       email: user.email,
       image: user.image,
       firstName: user.firstName,
@@ -184,7 +203,9 @@ export const profile = async (req, res) => {
     });
   } catch (error) {
     console.error("Error updating profile:", error);
-    res.status(500).json({ message: "Server error" });
+    res
+      .status(statusCodeResponse.serverError.code)
+      .json({ message: statusCodeResponse.serverError.message });
   }
 };
 
@@ -198,6 +219,8 @@ export const getProfile = async (req, res) => {
       image: user.image,
     });
   } catch (err) {
-    res.status(500).json({ error: "Failed to fetch profile" });
+    res
+      .status(statusCodeResponse.serverError.code)
+      .json({ error: "Failed to fetch profile" });
   }
 };

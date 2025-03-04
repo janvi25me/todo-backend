@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-import { type } from "os";
 
 const orderSchema = new mongoose.Schema({
   orderStatus: {
@@ -36,7 +35,7 @@ const orderSchema = new mongoose.Schema({
       SellerId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
-        required: true,
+        // required: true,
       },
       name: { type: String, required: true },
       price: { type: Number, required: true },

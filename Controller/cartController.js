@@ -1,4 +1,5 @@
 import { Cart } from "../Model/Cart.js";
+import statusCodeResponse from "../helpers/statusCodeResponse.js";
 // import { Product } from "../Model/Product.js";
 
 //Function to calculate total,subtotal & delivery
@@ -21,8 +22,8 @@ export const addToCart = async (req, res) => {
 
   try {
     if (Number(role) !== 1) {
-      return res.status(403).json({
-        message: "Only buyers can add items to cart",
+      return res.status(statusCodeResponse.forbidden.code).json({
+        message: statusCodeResponse.forbidden.message,
         success: false,
       });
     }
@@ -35,8 +36,8 @@ export const addToCart = async (req, res) => {
       !Number.isInteger(qty) ||
       qty < 1
     ) {
-      return res.status(400).json({
-        message: "All fields are required and qty must be at least 1",
+      return res.status(statusCodeResponse.badRequest.code).json({
+        message: statusCodeResponse.forbidden.message,
         success: false,
       });
     }
@@ -69,8 +70,8 @@ export const addToCart = async (req, res) => {
 
     await cart.save();
 
-    res.status(200).json({
-      message: "Item added to cart successfully.",
+    res.status(statusCodeResponse.success.code).json({
+      message: statusCodeResponse.success.message,
       success: true,
       data: {
         ...cart.toObject(),
@@ -82,8 +83,8 @@ export const addToCart = async (req, res) => {
     });
   } catch (err) {
     console.error("Error in addToCart:", err);
-    return res.status(500).json({
-      message: "An error occurred while adding items to cart",
+    return res.status(statusCodeResponse.serverError.code).json({
+      message: statusCodeResponse.serverError.message,
       success: false,
     });
   }
@@ -94,8 +95,8 @@ export const getBuyerProductFromCart = async (req, res) => {
   try {
     const cart = await Cart.findOne({ buyerId });
     if (!cart) {
-      return res.status(404).json({
-        message: "No cart found.",
+      return res.status(statusCodeResponse.notFound.code).json({
+        message: statusCodeResponse.notFound.message,
         success: false,
       });
     }
@@ -108,8 +109,8 @@ export const getBuyerProductFromCart = async (req, res) => {
       cart.items
     );
 
-    res.status(200).json({
-      message: "User Cart retrieved successfully.",
+    res.status(statusCodeResponse.success.code).json({
+      message: statusCodeResponse.success.message,
       success: true,
       data: {
         ...cart.toObject(),
@@ -121,8 +122,8 @@ export const getBuyerProductFromCart = async (req, res) => {
     });
   } catch (err) {
     console.error("Error in getBuyerProductFromCart:", err);
-    return res.status(500).json({
-      message: "An error occurred while retrieving the cart.",
+    return res.status(statusCodeResponse.serverError.code).json({
+      message: statusCodeResponse.serverError.message,
       success: false,
     });
   }
@@ -134,16 +135,16 @@ export const removeProduct = async (req, res) => {
   const role = req.user.role;
 
   if (!id) {
-    return res.status(400).json({
-      message: "Product ID is required",
+    return res.status(statusCodeResponse.badRequest.code).json({
+      message: statusCodeResponse.badRequest.message,
       success: false,
     });
   }
 
   try {
     if (Number(role) !== 1) {
-      return res.status(403).json({
-        message: "You are not allowed to edit this product",
+      return res.status(statusCodeResponse.forbidden.code).json({
+        message: statusCodeResponse.forbidden.message,
         success: false,
       });
     }
@@ -151,8 +152,8 @@ export const removeProduct = async (req, res) => {
     let cart = await Cart.findOne({ buyerId });
 
     if (!cart) {
-      return res.status(404).json({
-        message: "No cart found for this buyer",
+      return res.status(statusCodeResponse.notFound.code).json({
+        message: statusCodeResponse.notFound.message,
         success: false,
       });
     }
@@ -162,8 +163,8 @@ export const removeProduct = async (req, res) => {
     );
 
     if (existingItems.length === cart.items.length) {
-      return res.status(404).json({
-        message: "Product not found in the cart",
+      return res.status(statusCodeResponse.notFound.code).json({
+        message: statusCodeResponse.notFound.message,
         success: false,
       });
     }
@@ -177,8 +178,8 @@ export const removeProduct = async (req, res) => {
     // Save the updated cart
     await cart.save();
 
-    return res.status(200).json({
-      message: "Product removed from cart",
+    return res.status(statusCodeResponse.success.code).json({
+      message: statusCodeResponse.success.message,
       success: true,
       noOfProducts,
       subTotal,
@@ -187,8 +188,8 @@ export const removeProduct = async (req, res) => {
     });
   } catch (err) {
     console.error("Error while removing product:", err);
-    return res.status(500).json({
-      message: "Error occurred while removing product from cart",
+    return res.status(statusCodeResponse.serverError.code).json({
+      message: statusCodeResponse.serverError.message,
       success: false,
     });
   }

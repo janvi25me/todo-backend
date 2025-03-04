@@ -6,6 +6,7 @@ import { Product } from "../Model/Product.js";
 import { Payment } from "../Model/Payment.js";
 import moment from "moment";
 import mongoose from "mongoose";
+import statusCodeResponse from "../helpers/statusCodeResponse.js";
 
 const calculateCartTotals = (cartItems) => {
   const delivery = 0;
@@ -25,16 +26,16 @@ export const createOrder = async (req, res) => {
 
   try {
     if (role === "2") {
-      return res.status(503).json({
-        message: "Only buyers can order the product",
+      return res.status(statusCodeResponse.serviceUnavailable.code).json({
+        message: statusCodeResponse.serviceUnavailable.message,
         success: false,
       });
     }
 
     const cart = await Cart.findOne({ buyerId });
     if (!cart) {
-      return res.status(404).json({
-        message: "No cart found for this buyer.",
+      return res.status(statusCodeResponse.notFound.code).json({
+        message: statusCodeResponse.notFound.message,
         success: false,
       });
     }
@@ -44,8 +45,8 @@ export const createOrder = async (req, res) => {
     );
 
     if (!buyerInfo) {
-      return res.status(404).json({
-        message: "Buyer information not found.",
+      return res.status(statusCodeResponse.notFound.code).json({
+        message: statusCodeResponse.notFound.message,
         success: false,
       });
     }
@@ -56,8 +57,8 @@ export const createOrder = async (req, res) => {
     }).select("_id myAddress");
 
     if (!myAddress) {
-      return res.status(404).json({
-        message: "Default address not found.",
+      return res.status(statusCodeResponse.notFound.code).json({
+        message: statusCodeResponse.notFound.message,
         success: false,
       });
     }
@@ -113,15 +114,15 @@ export const createOrder = async (req, res) => {
 
     await Cart.updateOne({ buyerId }, { $set: { items: [] } });
 
-    res.status(200).json({
-      message: "Order created successfully.",
+    res.status(statusCodeResponse.success.code).json({
+      message: statusCodeResponse.success.message,
       success: true,
       data: order,
     });
   } catch (error) {
     console.error("Error in createOrder:", error);
-    return res.status(500).json({
-      message: "An error occurred while creating the order.",
+    return res.status(statusCodeResponse.serverError.code).json({
+      message: statusCodeResponse.serverError.message,
       success: false,
       error: error.message,
     });
@@ -135,15 +136,15 @@ export const fetchOrders = async (req, res) => {
 
   try {
     if (role !== "1" && role !== "2") {
-      return res.status(403).json({
-        message: "Unauthorized access.",
+      return res.status(statusCodeResponse.forbidden.code).json({
+        message: statusCodeResponse.forbidden.message,
         success: false,
       });
     }
 
     if (!orderId) {
-      return res.status(400).json({
-        message: "Order ID is required.",
+      return res.status(statusCodeResponse.badRequest.code).json({
+        message: statusCodeResponse.badRequest.message,
         success: false,
       });
     }
@@ -153,8 +154,8 @@ export const fetchOrders = async (req, res) => {
     );
 
     if (!order) {
-      return res.status(404).json({
-        message: "Order not found.",
+      return res.status(statusCodeResponse.notFound.code).json({
+        message: statusCodeResponse.notFound.message,
         success: false,
       });
     }
@@ -254,15 +255,15 @@ export const fetchOrders = async (req, res) => {
       paymentStatus: payment ? payment.paymentStatus : "PENDING",
     };
 
-    res.status(200).json({
-      message: "Order fetched successfully.",
+    res.status(statusCodeResponse.success.code).json({
+      message: statusCodeResponse.success.message,
       success: true,
       data: orderDetails,
     });
   } catch (error) {
     console.error("Error in fetchOrders:", error);
-    return res.status(500).json({
-      message: "An error occurred while fetching the order.",
+    return res.status(statusCodeResponse.serverError.code).json({
+      message: statusCodeResponse.serverError.message,
       success: false,
     });
   }
@@ -281,9 +282,9 @@ export const buyerOrders = async (req, res) => {
     const { role, id } = req.user;
 
     if (role !== "1") {
-      return res.status(403).json({
+      return res.status(statusCodeResponse.forbidden.code).json({
         success: false,
-        message: "Access denied. Only buyers can view orders.",
+        message: statusCodeResponse.forbidden.code,
       });
     }
 
@@ -315,9 +316,9 @@ export const buyerOrders = async (req, res) => {
 
     if (from) {
       if (!moment(from, "DD-MM-YYYY", true).isValid()) {
-        return res.status(400).json({
+        return res.status(statusCodeResponse.badRequest.code).json({
           success: false,
-          message: "Invalid date format. Use DD-MM-YYYY.",
+          message: statusCodeResponse.badRequest.message,
         });
       }
       fromDate = moment.utc(from, "DD-MM-YYYY").startOf("day").toDate();
@@ -325,9 +326,9 @@ export const buyerOrders = async (req, res) => {
 
     if (to) {
       if (!moment(to, "DD-MM-YYYY", true).isValid()) {
-        return res.status(400).json({
+        return res.status(statusCodeResponse.badRequest.code).json({
           success: false,
-          message: "Invalid date format. Use DD-MM-YYYY.",
+          message: statusCodeResponse.badRequest.message,
         });
       }
       toDate = moment.utc(to, "DD-MM-YYYY").endOf("day").toDate();
@@ -357,13 +358,13 @@ export const buyerOrders = async (req, res) => {
       .sort({ createdAt: -1 }); // Sorting by latest orders
 
     if (!orders.length) {
-      return res.status(200).json({
+      return res.status(statusCodeResponse.success.code).json({
         success: true,
         count: 0,
         totalPages: 0,
         currentPage: pageNumber,
         orders: [],
-        message: "No orders found for the given filters.",
+        message: statusCodeResponse.badRequest.message,
       });
     }
 
@@ -393,7 +394,7 @@ export const buyerOrders = async (req, res) => {
       })
     );
 
-    res.status(200).json({
+    res.status(statusCodeResponse.success.code).json({
       success: true,
       count: enrichedOrders.length,
       totalOrders,
@@ -403,9 +404,9 @@ export const buyerOrders = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching orders:", error);
-    res.status(500).json({
+    res.status(statusCodeResponse.serverError.code).json({
       success: false,
-      message: "Failed to fetch orders",
+      message: statusCodeResponse.badRequest.message,
       error: error.message,
     });
   }
@@ -424,9 +425,9 @@ export const sellerOrders = async (req, res) => {
     const { role, id } = req.user;
 
     if (role !== "2") {
-      return res.status(403).json({
+      return res.status(statusCodeResponse.forbidden.code).json({
         success: false,
-        message: "Access denied. Only sellers can view orders.",
+        message: statusCodeResponse.forbidden.message,
       });
     }
 
@@ -447,9 +448,9 @@ export const sellerOrders = async (req, res) => {
 
     if (from) {
       if (!moment(from, "DD-MM-YYYY", true).isValid()) {
-        return res.status(400).json({
+        return res.status(statusCodeResponse.badRequest.code).json({
           success: false,
-          message: "Invalid date format. Use DD-MM-YYYY.",
+          message: statusCodeResponse.badRequest.code,
         });
       }
       fromDate = moment.utc(from, "DD-MM-YYYY").startOf("day").toDate();
@@ -457,9 +458,9 @@ export const sellerOrders = async (req, res) => {
 
     if (to) {
       if (!moment(to, "DD-MM-YYYY", true).isValid()) {
-        return res.status(400).json({
+        return res.status(statusCodeResponse.badRequest.code).json({
           success: false,
-          message: "Invalid date format. Use DD-MM-YYYY.",
+          message: statusCodeResponse.badRequest.code,
         });
       }
       toDate = moment.utc(to, "DD-MM-YYYY").endOf("day").toDate();
@@ -486,13 +487,13 @@ export const sellerOrders = async (req, res) => {
       .sort({ createdAt: -1 });
 
     if (!orders.length) {
-      return res.status(200).json({
+      return res.status(statusCodeResponse.success.code).json({
         success: true,
         count: 0,
         totalPages: 0,
         currentPage: pageNumber,
         orders: [],
-        message: "No orders found for this seller with the given filters.",
+        message: statusCodeResponse.success.code,
       });
     }
 
@@ -508,7 +509,7 @@ export const sellerOrders = async (req, res) => {
 
     // console.log("Filtered seller orders", filteredOrders);
 
-    res.status(200).json({
+    res.status(statusCodeResponse.success.code).json({
       success: true,
       count: filteredOrders.length,
       totalOrders,
@@ -518,9 +519,9 @@ export const sellerOrders = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching seller orders:", error);
-    res.status(500).json({
+    res.status(statusCodeResponse.serverError.code).json({
       success: false,
-      message: "Failed to fetch seller orders",
+      message: statusCodeResponse.serverError.code,
       error: error.message,
     });
   }
@@ -530,13 +531,15 @@ export const updateOrderDetails = async (req, res) => {
   const { orderId, action, productId } = req.body;
   const role = req?.user?.role;
   const otp = Math.floor(100000 + Math.random() * 900000);
+
   try {
     if (role !== "2") {
-      return res.status(403).json({
-        message: "Only sellers can update order details.",
+      return res.status(statusCodeResponse.forbidden.code).json({
+        message: statusCodeResponse.forbidden.message,
         success: false,
       });
     }
+
     try {
       const updatedOrder = await Order.findOneAndUpdate(
         { _id: orderId, "products.productId": { $in: productId } },
@@ -553,57 +556,52 @@ export const updateOrderDetails = async (req, res) => {
       );
 
       if (!updatedOrder) {
-        return res.status(200).json({
-          message: "Order not found.",
+        return res.status(statusCodeResponse.notFound.code).json({
+          message: "Order or product not found.",
           success: false,
         });
       }
 
-      //check if all product status is complete then update main status
-      const allStatuses = updatedOrder.products.map(
-        (product) => product.productStatus
+      // Check if all product statuses are COMPLETED
+      const allCompleted = updatedOrder.products.every(
+        (product) => product.productStatus === "COMPLETED"
       );
 
-      const uniqueStatuses = [...new Set(allStatuses)];
-
-      if (uniqueStatuses.length === 1) {
-        const unifiedStatus = uniqueStatuses[0];
-
-        // Update the orderStatus if all products have the same status
-        if (["IN_TRANSIT", "COMPLETED"].includes(unifiedStatus)) {
-          updatedOrder.orderStatus = unifiedStatus;
-          await updatedOrder.save();
-        }
+      if (allCompleted) {
+        updatedOrder.orderStatus = "COMPLETED";
+        await updatedOrder.save();
       }
-      // console.log("Updated Order", updatedOrder);
-      return res.status(200).json({
-        message: "Order Updated.",
+
+      return res.status(statusCodeResponse.success.code).json({
+        message: "Order updated successfully.",
         success: true,
+        updatedOrder,
       });
     } catch (error) {
-      res.status(500).json({
-        message: "An error occurred while updating order details.",
+      res.status(statusCodeResponse.serverError.code).json({
+        message: statusCodeResponse.serverError.message,
         success: false,
         error: error.message,
       });
     }
   } catch (error) {
     console.error("Error in updateOrderDetails:", error);
-    res.status(500).json({
-      message: "An error occurred while updating order details.",
+    res.status(statusCodeResponse.serverError.code).json({
+      message: statusCodeResponse.serverError.message,
       success: false,
       error: error.message,
     });
   }
 };
+
 export const verifyOtp = async (req, res) => {
   const { orderId, productId, otp } = req.body;
   const role = req?.user?.role;
 
   try {
     if (role !== "2") {
-      return res.status(403).json({
-        message: "Only sellers can verify OTP details.",
+      return res.status(statusCodeResponse.forbidden.code).json({
+        message: statusCodeResponse.forbidden.message,
         success: false,
       });
     }
@@ -611,8 +609,8 @@ export const verifyOtp = async (req, res) => {
     // OTP validation
     const otpRegex = /^\d{6}$/;
     if (!otpRegex.test(otp)) {
-      return res.status(400).json({
-        message: "Invalid OTP format. OTP must be exactly 6 digits.",
+      return res.status(statusCodeResponse.badRequest.code).json({
+        message: statusCodeResponse.badRequest.message,
         success: false,
       });
     }
@@ -624,8 +622,8 @@ export const verifyOtp = async (req, res) => {
     });
 
     if (!order) {
-      return res.status(400).json({
-        message: "Invalid OTP",
+      return res.status(statusCodeResponse.badRequest.code).json({
+        message: statusCodeResponse.badRequest.message,
         success: false,
       });
     }
@@ -634,15 +632,15 @@ export const verifyOtp = async (req, res) => {
     const payment = await Payment.findOne({ orderId: order._id });
 
     if (!payment) {
-      return res.status(404).json({
-        message: "Payment record not found.",
+      return res.status(statusCodeResponse.notFound.code).json({
+        message: statusCodeResponse.notFound.message,
         success: false,
       });
     }
 
     if (payment.paymentStatus !== "SUCCESS") {
-      return res.status(400).json({
-        message: "Payment status is not successful.",
+      return res.status(statusCodeResponse.badRequest.code).json({
+        message: statusCodeResponse.badRequest.message,
         success: false,
       });
     }
@@ -659,17 +657,84 @@ export const verifyOtp = async (req, res) => {
       { $set: { "products.$.productStatus": "COMPLETED" } }
     );
 
-    return res.status(200).json({
-      message: "OTP verified, order and product completed.",
+    return res.status(statusCodeResponse.success.code).json({
+      message: statusCodeResponse.success.message,
       success: true,
     });
   } catch (error) {
     console.error("Error in verifyOtp:", error);
-    res.status(500).json({
-      message:
-        "An error occurred while verifying OTP and updating order/product status.",
+    res.status(statusCodeResponse.serverError.code).json({
+      message: statusCodeResponse.serverError.message,
       success: false,
       error: error.message,
     });
+  }
+};
+
+export const cancelOrder = async (req, res) => {
+  const { orderId } = req.params;
+  const userId = req.user?.id;
+  const userRole = req.user?.role;
+
+  try {
+    const order = await Order.findById(orderId).populate(
+      "products.SellerId",
+      "firstName lastName role _id"
+    );
+
+    if (!order) {
+      return res
+        .status(statusCodeResponse.notFound.code)
+        .json({ message: statusCodeResponse.notFound.message });
+    }
+
+    // console.log("Logged-in User ID:", userId);
+    // console.log("Logged-in User Role:", userRole);
+    // console.log("Order Buyer ID:", order?.buyerInfo?.toString());
+
+    if (order.paymentStatus === "SUCCESS") {
+      return res.status(statusCodeResponse.badRequest.code).json({
+        message: statusCodeResponse.badRequest.message,
+      });
+    }
+
+    if (!order?.buyerInfo) {
+      return res
+        .status(statusCodeResponse.badRequest.code)
+        .json({ message: statusCodeResponse.badRequest.message });
+    }
+
+    // Allow only the buyer to cancel
+    if (
+      userRole !== "1" ||
+      !new mongoose.Types.ObjectId(userId).equals(order.buyerInfo)
+    ) {
+      return res.status(statusCodeResponse.forbidden.code).json({
+        message: statusCodeResponse.badRequest.message,
+        details: {
+          expectedBuyerId: order.buyerInfo.toString(),
+          actualUserId: userId,
+          role: userRole,
+        },
+      });
+    }
+
+    // Cancel the entire order
+    order.orderStatus = "CANCELLED";
+    order.products.forEach((product) => (product.productStatus = "CANCELLED"));
+    order.cancelledBy = "BUYER";
+
+    await order.save();
+
+    res.status(statusCodeResponse.success.code).json({
+      message: statusCodeResponse.success.message,
+      order,
+      success: true,
+    });
+  } catch (error) {
+    console.error("Cancel order error:", error);
+    res
+      .status(statusCodeResponse.serverError.code)
+      .json({ message: statusCodeResponse.serverError.message, error });
   }
 };

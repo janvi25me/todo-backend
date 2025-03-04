@@ -6,6 +6,7 @@ import {
   sellerOrders,
   updateOrderDetails,
   verifyOtp,
+  cancelOrder,
 } from "../Controller/orderController.js";
 import { Authenticated } from "../Middleware/Auth.js";
 
@@ -19,5 +20,6 @@ router.post("/createOrder", Authenticated, createOrder);
 router.post("/verifyOtp", Authenticated, verifyOtp);
 
 router.patch("/update", Authenticated, updateOrderDetails);
+router.patch("/cancelOrder/:orderId", Authenticated, cancelOrder);
 
 export default router;

@@ -1,9 +1,9 @@
 import { Product } from "../Model/Product.js";
 import { User } from "../Model/User.js";
 import mongoose from "mongoose";
+import statusCodeResponse from "../helpers/statusCodeResponse.js";
 
 // role: Buyer =1, Seller =2
-
 export const addProduct = async (req, res) => {
   const { name, description, price, qty, category, image } = req.body;
   const SellerId = req.user.id;
@@ -12,16 +12,16 @@ export const addProduct = async (req, res) => {
   try {
     // Check if the user is a seller (roleId = 2)
     if (Number(role) !== 2) {
-      return res.status(403).json({
-        message: "Unauthorized: Only sellers (roleId = 2) can add products",
+      return res.status(statusCodeResponse.forbidden.code).json({
+        message: statusCodeResponse.forbidden.message,
       });
     }
 
     const existingProduct = await Product.findOne({ name, SellerId });
 
     if (existingProduct) {
-      return res.status(400).json({
-        message: "product with this name already exists for this seller.",
+      return res.status(statusCodeResponse.badRequest.code).json({
+        message: statusCodeResponse.badRequest.message,
         success: false,
       });
     }
@@ -40,18 +40,21 @@ export const addProduct = async (req, res) => {
     // console.log(product.image.replace(/\\/g, "/"));
 
     if (!product) {
-      return res.status(400).json({
-        message: "There is no product item found",
+      return res.status(statusCodeResponse.badRequest.code).json({
+        message: statusCodeResponse.badRequest.message,
         success: false,
       });
     }
 
-    res.status(200).json({ message: "product item created", product });
+    res
+      .status(statusCodeResponse.success.code)
+      .json({ message: statusCodeResponse.success.message, product });
   } catch (err) {
     console.error("Error while adding product", err);
-    res
-      .status(500)
-      .json({ message: "Internal server error", error: err.message });
+    res.status(statusCodeResponse.serverError.code).json({
+      message: statusCodeResponse.serverError.message,
+      error: err.message,
+    });
   }
 };
 
@@ -62,7 +65,9 @@ export const editProduct = async (req, res) => {
   console.log(userId);
   try {
     if (!mongoose.Types.ObjectId.isValid(eid)) {
-      return res.status(400).json({ message: "Invalid product ID format" });
+      return res
+        .status(statusCodeResponse.badRequest.code)
+        .json({ message: statusCodeResponse.badRequest.message });
     }
 
     let product = await Product.findById(eid);
@@ -70,8 +75,8 @@ export const editProduct = async (req, res) => {
 
     // check if the role is a buyer
     if (userRole == 1) {
-      return res.status(403).json({
-        message: "You are not allowed to edit this product",
+      return res.status(statusCodeResponse.forbidden.code).json({
+        message: statusCodeResponse.forbidden.message,
         success: false,
       });
     }
@@ -86,12 +91,16 @@ export const editProduct = async (req, res) => {
       }
     );
 
-    res
-      .status(200)
-      .json({ message: "product updated", success: true, product });
+    res.status(statusCodeResponse.success.code).json({
+      message: statusCodeResponse.success.message,
+      success: true,
+      product,
+    });
   } catch (err) {
     console.log("Error while updating", err);
-    res.status(500).json({ message: "Internal server error" });
+    res
+      .status(statusCodeResponse.serverError.code)
+      .json({ message: statusCodeResponse.serverError.message });
   }
 };
 
@@ -100,25 +109,27 @@ export const deleteProduct = async (req, res) => {
   const userRole = req.user.role;
 
   if (userRole == 1) {
-    return res.status(403).json({
-      message: "You are not allowed to edit this product",
+    return res.status(statusCodeResponse.forbidden.code).json({
+      message: statusCodeResponse.forbidden.message,
       success: false,
     });
   }
 
   if (!mongoose.Types.ObjectId.isValid(id)) {
-    return res.status(400).json({ message: "Invalid product ID format" });
+    return res
+      .status(statusCodeResponse.badRequest.code)
+      .json({ message: statusCodeResponse.badRequest.message });
   }
 
   try {
     let product = await Product.findByIdAndDelete(id);
     if (!product) {
       return res
-        .status(404)
-        .json({ message: "Invalid ID, try again", success: false });
+        .status(statusCodeResponse.notFound.code)
+        .json({ message: statusCodeResponse.notFound.message, success: false });
     }
-    res.status(200).json({
-      message: "Item deleted",
+    res.status(statusCodeResponse.success.code).json({
+      message: statusCodeResponse.success.message,
       success: true,
       products: product || [],
     });
@@ -126,53 +137,6 @@ export const deleteProduct = async (req, res) => {
     console.log("Error while deleting t");
   }
 };
-
-// export const getProducts = async (req, res) => {
-//   const { id, role } = req.user;
-//   const page = parseInt(req.query.page) || 1;
-//   const limit = parseInt(req.query.limit) || 5;
-//   const startIndex = (page - 1) * limit;
-
-//   try {
-//     let products;
-
-//     if (role === "seller") {
-//       products = await Product.find()
-//         .sort({ createdAt: -1 })
-//         .skip(startIndex)
-//         .limit(limit);
-//     } else {
-//       products = await Product.find({ SellerId: id })
-//         .sort({ createdAt: -1 })
-//         .skip(startIndex)
-//         .limit(limit);
-//     }
-
-//     const totalProducts = await Product.countDocuments();
-
-//     if (!products || products.length === 0) {
-//       return res
-//         .status(400)
-//         .json({ message: "No products found", success: false });
-//     }
-
-//     res.status(200).json({
-//       message: "products fetched successfully",
-//       success: true,
-//       products,
-//       totalProducts,
-//       page,
-//       totalPages: Math.ceil(totalProducts / limit),
-//       limit,
-//     });
-//   } catch (err) {
-//     console.log("Error while fetching product", err);
-//     res.status(500).json({
-//       message: "Internal server error",
-//       error: err.message,
-//     });
-//   }
-// };
 
 export const allProducts = async (req, res) => {
   const page = parseInt(req.query.page) || 1;
@@ -206,7 +170,7 @@ export const allProducts = async (req, res) => {
     const totalProducts = await Product.countDocuments(queryConditions);
 
     if (startIndex >= totalProducts) {
-      return res.status(404).json({
+      return res.status(statusCodeResponse.notFound.code).json({
         message: "No products found for the given filters.",
         success: false,
       });
@@ -217,8 +181,8 @@ export const allProducts = async (req, res) => {
       .skip(startIndex)
       .limit(limit);
 
-    res.status(200).json({
-      message: "Product data",
+    res.status(statusCodeResponse.success.code).json({
+      message: "Product data retrieved successfully",
       success: true,
       products,
       totalProducts,
@@ -227,8 +191,8 @@ export const allProducts = async (req, res) => {
       limit,
     });
   } catch (err) {
-    res.status(500).json({
-      message: "Internal server error",
+    res.status(statusCodeResponse.serverError.code).json({
+      message: statusCodeResponse.serverError.message,
       error: err.message,
     });
   }
@@ -248,15 +212,15 @@ export const buyerProducts = async (req, res) => {
 
   try {
     if (role !== "1") {
-      return res.status(403).json({
-        message: "Access denied. Only buyers can fetch products.",
+      return res.status(statusCodeResponse.forbidden.code).json({
+        message: statusCodeResponse.forbidden.message,
         success: false,
       });
     }
 
     if (!mongoose.Types.ObjectId.isValid(bid)) {
-      return res.status(400).json({
-        message: "Invalid buyer ID format.",
+      return res.status(statusCodeResponse.badRequest.code).json({
+        message: statusCodeResponse.badRequest.message,
         success: false,
       });
     }
@@ -265,7 +229,9 @@ export const buyerProducts = async (req, res) => {
 
     if (seek_id && seek_id !== "null" && seek_id !== "undefined") {
       if (!mongoose.Types.ObjectId.isValid(seek_id)) {
-        return res.status(400).json({ message: "Invalid seek_id format." });
+        return res
+          .status(statusCodeResponse.badRequest.code)
+          .json({ message: statusCodeResponse.badRequest.message });
       }
       queryConditions._id = { $lt: new mongoose.Types.ObjectId(seek_id) };
     }
@@ -285,16 +251,16 @@ export const buyerProducts = async (req, res) => {
     const totalProducts = await Product.countDocuments(queryConditions);
 
     if (searchQuery && totalProducts === 0) {
-      return res.status(200).json({
-        message: "Search product not found.",
+      return res.status(statusCodeResponse.success.code).json({
+        message: statusCodeResponse.success.message,
         success: true,
         products: [],
       });
     }
 
     if (startIndex >= totalProducts) {
-      return res.status(200).json({
-        message: "No products found for the given filters.",
+      return res.status(statusCodeResponse.success.code).json({
+        message: statusCodeResponse.success.message,
         success: true,
         products: [],
       });
@@ -305,8 +271,8 @@ export const buyerProducts = async (req, res) => {
       .skip(startIndex)
       .limit(limit);
 
-    res.status(200).json({
-      message: "Products retrieved successfully.",
+    res.status(statusCodeResponse.success.code).json({
+      message: statusCodeResponse.success.message,
       success: true,
       products,
       totalProducts,
@@ -316,8 +282,8 @@ export const buyerProducts = async (req, res) => {
     });
   } catch (err) {
     console.error("Error while fetching products:", err);
-    res.status(500).json({
-      message: "Internal server error.",
+    res.status(statusCodeResponse.badRequest.message).json({
+      message: statusCodeResponse.badRequest.message,
       error: err.message,
     });
   }
@@ -334,14 +300,16 @@ export const sellerProductsBySeekId = async (req, res) => {
 
   try {
     if (role !== "2") {
-      return res.status(403).json({
-        message: "Access denied. Only sellers can fetch products.",
+      return res.status(statusCodeResponse.forbidden.code).json({
+        message: statusCodeResponse.forbidden.message,
         success: false,
       });
     }
 
     if (!sid || !mongoose.Types.ObjectId.isValid(sid)) {
-      return res.status(400).json({ message: "Invalid or missing seller ID." });
+      return res
+        .status(statusCodeResponse.badRequest.code)
+        .json({ message: statusCodeResponse.badRequest.message });
     }
 
     const user = await User.findById(sid);
@@ -359,7 +327,9 @@ export const sellerProductsBySeekId = async (req, res) => {
 
     if (seek_id && seek_id !== "null" && seek_id !== "undefined") {
       if (!mongoose.Types.ObjectId.isValid(seek_id)) {
-        return res.status(400).json({ message: "Invalid seek_id format." });
+        return res
+          .status(statusCodeResponse.badRequest.code)
+          .json({ message: statusCodeResponse.badRequest.message });
       }
       query._id = { $lt: new mongoose.Types.ObjectId(seek_id) };
     }
@@ -367,8 +337,8 @@ export const sellerProductsBySeekId = async (req, res) => {
     const totalProducts = await Product.countDocuments(query);
 
     if (startIndex >= totalProducts && totalProducts > 0) {
-      return res.status(404).json({
-        message: "No products found on this page.",
+      return res.status(statusCodeResponse.notFound.code).json({
+        message: statusCodeResponse.notFound.message,
         success: false,
         products: [],
       });
@@ -379,8 +349,8 @@ export const sellerProductsBySeekId = async (req, res) => {
       .skip(startIndex)
       .limit(limit);
 
-    res.status(200).json({
-      message: "Products retrieved successfully.",
+    res.status(statusCodeResponse.success.code).json({
+      message: statusCodeResponse.success.message,
       success: true,
       products,
       totalProducts,
@@ -390,9 +360,10 @@ export const sellerProductsBySeekId = async (req, res) => {
     });
   } catch (err) {
     console.error("Error while getting products by seller ID:", err);
-    res
-      .status(500)
-      .json({ message: "Internal server error.", error: err.message });
+    res.status(statusCodeResponse.serverError.code).json({
+      message: statusCodeResponse.serverError.message,
+      error: err.message,
+    });
   }
 };
 
@@ -406,15 +377,17 @@ export const sellerProducts = async (req, res) => {
 
   try {
     if (!sid) {
-      return res.status(401).json({ message: "User not authenticated." });
+      return res
+        .status(statusCodeResponse.unauthorized.code)
+        .json({ message: statusCodeResponse.unauthorized.message });
     }
 
     const user = await User.findById(sid);
 
     if (!user || role !== "2") {
       return res
-        .status(403)
-        .json({ message: "Not authorized. Seller role required." });
+        .status(statusCodeResponse.forbidden.code)
+        .json({ message: statusCodeResponse.forbidden.message });
     }
 
     if (!mongoose.Types.ObjectId.isValid(sid)) {
@@ -436,23 +409,23 @@ export const sellerProducts = async (req, res) => {
 
     // Check if no products are found
     if (searchQuery && totalProducts === 0) {
-      return res.status(200).json({
-        message: "Search product not found.",
+      return res.status(statusCodeResponse.success.code).json({
+        message: statusCodeResponse.success.message,
         success: true,
         products: [],
       });
     }
 
     if (startIndex >= totalProducts && totalProducts > 0) {
-      return res.status(404).json({
-        message: "No products found on this page.",
+      return res.status(statusCodeResponse.notFound.code).json({
+        message: statusCodeResponse.notFound.message,
         success: false,
         products: [],
       });
     }
 
-    res.status(200).json({
-      message: "Products retrieved successfully",
+    res.status(statusCodeResponse.success.code).json({
+      message: statusCodeResponse.success.message,
       success: true,
       products,
       totalProducts,
@@ -462,8 +435,9 @@ export const sellerProducts = async (req, res) => {
     });
   } catch (err) {
     console.error("Error while getting products by seller ID", err);
-    res
-      .status(500)
-      .json({ message: "Internal server error", error: err.message });
+    res.status(statusCodeResponse.serverError.code).json({
+      message: statusCodeResponse.serverError.message,
+      error: err.message,
+    });
   }
 };

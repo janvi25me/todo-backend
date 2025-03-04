@@ -1,5 +1,6 @@
 import { Address } from "../Model/Address.js";
 import mongoose from "mongoose";
+import statusCodeResponse from "../helpers/statusCodeResponse.js";
 
 export const addUserAddress = async (req, res) => {
   const { myAddress, createdAt, isDefault } = req.body;
@@ -72,21 +73,23 @@ export const updateDefaultAddress = async (req, res) => {
 
     if (!updatedAddress) {
       await session.abortTransaction();
-      return res.status(404).json({ message: "Address not found." });
+      return res
+        .status(statusCodeResponse.notFound.code)
+        .json({ message: statusCodeResponse.notFound.message });
     }
 
     await session.commitTransaction();
     session.endSession();
 
-    res.status(200).json({
-      message: "Default address updated successfully",
+    res.status(statusCodeResponse.success.code).json({
+      message: statusCodeResponse.success.message,
       success: true,
       address: updatedAddress,
     });
   } catch (err) {
     console.error("Error updating default address:", err);
-    res.status(500).json({
-      message: "Internal server error",
+    res.status(statusCodeResponse.serverError.code).json({
+      message: statusCodeResponse.serverError.message,
       error: err.message,
     });
   }
@@ -98,8 +101,8 @@ export const getUserAddress = async (req, res) => {
 
   try {
     if (Number(role) !== 1) {
-      return res.status(403).json({
-        message: "Unauthorized: Only buyers (roleId = 1) can view addresses",
+      return res.status(statusCodeResponse.forbidden.code).json({
+        message: statusCodeResponse.forbidden.message,
       });
     }
 
@@ -108,23 +111,23 @@ export const getUserAddress = async (req, res) => {
       .sort({ isDefault: -1 });
 
     if (myAddress.length === 0) {
-      return res.status(200).json({
-        message: "No addresses found for this buyer",
+      return res.status(statusCodeResponse.success.code).json({
+        message: statusCodeResponse.success.message,
         success: true,
         data: { address: [] },
       });
     }
 
-    res.status(200).json({
-      message: "Addresses retrieved successfully",
+    res.status(statusCodeResponse.success.code).json({
+      message: statusCodeResponse.success.message,
       success: true,
       count: myAddress.length,
       data: myAddress,
     });
   } catch (err) {
     console.error("Error fetching addresses", err);
-    res.status(500).json({
-      message: "Internal server error",
+    res.status(statusCodeResponse.serverError.code).json({
+      message: statusCodeResponse.serverError.code,
       error: err.message,
     });
   }
@@ -136,14 +139,16 @@ export const editUserAddress = async (req, res) => {
     const userRole = req.user.role;
     // console.log("Edit ID", eid);
     if (Number(userRole) !== 1) {
-      return res.status(403).json({
-        message: "You are not allowed to edit this address",
+      return res.status(statusCodeResponse.forbidden.code).json({
+        message: statusCodeResponse.forbidden.message,
         success: false,
       });
     }
 
     if (!mongoose.Types.ObjectId.isValid(eid)) {
-      return res.status(400).json({ message: "Invalid address ID format" });
+      return res
+        .status(statusCodeResponse.badRequest.code)
+        .json({ message: statusCodeResponse.badRequest.message });
     }
 
     if (req.body.isDefault) {
@@ -160,18 +165,20 @@ export const editUserAddress = async (req, res) => {
     );
 
     if (!address) {
-      return res.status(404).json({ message: "Address not found" });
+      return res
+        .status(statusCodeResponse.notFound.code)
+        .json({ message: statusCodeResponse.notFound.message });
     }
 
-    res.status(200).json({
-      message: "Address updated",
+    res.status(statusCodeResponse.success.code).json({
+      message: statusCodeResponse.success.message,
       success: true,
       data: address,
     });
   } catch (err) {
     console.error("Error editing address", err);
-    res.status(500).json({
-      message: "Internal server error",
+    res.status(statusCodeResponse.serverError.code).json({
+      message: statusCodeResponse.serverError.message,
       error: err.message,
     });
   }
@@ -182,27 +189,29 @@ export const deleteUserAddress = async (req, res) => {
     const rid = req.params.rid;
     const userRole = req.user.role;
     if (Number(userRole) !== 1) {
-      return res.status(403).json({
-        message: "You are not allowed to edit this product",
+      return res.status(statusCodeResponse.forbidden.code).json({
+        message: statusCodeResponse.forbidden.message,
         success: false,
       });
     }
 
     if (!mongoose.Types.ObjectId.isValid(rid)) {
-      return res.status(400).json({ message: "Invalid address ID format" });
+      return res
+        .status(statusCodeResponse.badRequest.code)
+        .json({ message: statusCodeResponse.badRequest.message });
     }
 
     let address = await Address.findByIdAndDelete(rid);
 
     if (!address) {
-      return res.status(404).json({
-        message: "Address not found",
+      return res.status(statusCodeResponse.notFound.code).json({
+        message: statusCodeResponse.notFound.message,
         success: false,
       });
     }
 
-    res.status(200).json({
-      message: "Address deleted!!",
+    res.status(statusCodeResponse.success.code).json({
+      message: statusCodeResponse.success.message,
       success: true,
     });
   } catch (err) {

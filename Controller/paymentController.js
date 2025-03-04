@@ -3,6 +3,7 @@ import express from "express";
 import Stripe from "stripe";
 import dotenv from "dotenv";
 import { Order } from "../Model/Order.js";
+import statusCodeResponse from "../helpers/statusCodeResponse.js";
 
 dotenv.config();
 
@@ -17,7 +18,10 @@ export const checkout = async (req, res) => {
     !Array.isArray(products.products) ||
     products.products.length === 0
   ) {
-    return res.status(400).json({ error: "Invalid products data format" });
+    return res.status(statusCodeResponse.badRequest.code).json({
+      message: statusCodeResponse.badRequest.message,
+      error: "Invalid products data format",
+    });
   }
 
   let orderId = products?._id;
@@ -100,7 +104,12 @@ export const checkout = async (req, res) => {
     });
   } catch (error) {
     console.error("Error in checkout process:", error);
-    res.status(500).json({ error: "Failed to process checkout" });
+    res
+      .status(statusCodeResponse.serverError.code)
+      .json({
+        message: statusCodeResponse.serverError.code,
+        error: "Failed to process checkout",
+      });
   }
 };
 

@@ -2,7 +2,7 @@ import { Payment } from "../Model/Payment.js";
 import express from "express";
 import Stripe from "stripe";
 import dotenv from "dotenv";
-import { Order } from "../Model/Order.js";
+// import { Order } from "../Model/Order.js";
 
 dotenv.config();
 
@@ -33,82 +33,69 @@ router.post(
         case "checkout.session.completed": {
           const session = event.data.object;
           const { orderId, userId } = session.metadata;
-          console.log("Order ID", orderId);
+
           if (!orderId || !userId) {
             console.error("Missing orderId or userId in session metadata");
             return res.status(400).json({ error: "Invalid metadata" });
           }
 
-          // Update Payment Status
-          const updatedPayment = await Payment.findOneAndUpdate(
-            { stripePaymentId: session.id },
-            { paymentStatus: "SUCCESS" },
-            { new: true }
-          );
+          // Check if payment already exists
+          const existingPayment = await Payment.findOne({ orderId });
 
-          if (!updatedPayment) {
-            console.error(
-              "Payment record not found for Stripe ID:",
-              session.id
-            );
-            return res.status(404).json({ error: "Payment record not found" });
+          if (existingPayment) {
+            console.log("Payment entry already exists, skipping creation.");
+          } else {
+            const payment = new Payment({
+              orderId,
+              userId,
+              stripePaymentId: session.payment_intent,
+              paymentStatus: "PENDING",
+              orderDate: new Date(),
+              amount: session.amount_total / 100,
+            });
+
+            await payment.save();
+            console.log("Initial Payment entry created:", payment);
           }
 
-          //in here all data for order & userInfo is available
-          console.log("Payment Status Updated Successfully:", updatedPayment);
-
-          // Update Order Status to PAID
-
-          const updatedOrder = await Order.findByIdAndUpdate(
-            orderId,
-            { paymentStatus: "SUCCESS" }, // Only update paymentStatus
-            { new: true }
-          );
-
-          if (!updatedOrder) {
-            console.error("Order not found for ID:", orderId);
-            return res.status(404).json({ error: "Order not found" });
-          }
-
-          console.log("Order Status Updated to PAID:", updatedOrder);
           break;
         }
 
         case "payment_intent.succeeded": {
           const paymentIntent = event.data.object;
-          const { orderId, userId } = paymentIntent.metadata;
+          const { orderId } = paymentIntent.metadata;
 
-          if (!orderId || !userId) {
-            console.error("Missing metadata in PaymentIntent");
+          if (!orderId) {
+            console.error("Missing orderId in PaymentIntent metadata");
             return res.status(400).json({ error: "Invalid metadata" });
           }
 
-          const payment = new Payment({
-            orderId,
-            userId,
-            stripePaymentId: paymentIntent.id,
-            paymentStatus: "SUCCESS",
-            orderDate: new Date(),
-            amount: paymentIntent.amount / 100,
-          });
+          // Update payment status to SUCCESS
+          const updatedPayment = await Payment.findOneAndUpdate(
+            { orderId },
+            { paymentStatus: "SUCCESS" },
+            { new: true }
+          );
 
-          await payment.save();
-          console.log("Payment successfully saved:", payment);
+          if (updatedPayment) {
+            console.log("Payment Status Updated to SUCCESS:", updatedPayment);
+          } else {
+            console.warn(
+              "No matching payment found to update for order:",
+              orderId
+            );
+          }
+
           break;
         }
 
         case "payment_intent.payment_failed": {
-          console.warn(
-            "Payment failed for PaymentIntent:",
-            event.data.object.id
-          );
-
           const failedIntent = event.data.object;
           const { orderId } = failedIntent.metadata;
 
           // Update Payment Status to FAILED
           await Payment.findOneAndUpdate(
-            { stripePaymentId: failedIntent.id },
+            { orderId },
             { paymentStatus: "FAILED" }
           );
 
